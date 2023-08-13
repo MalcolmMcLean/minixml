@@ -36,7 +36,7 @@ and strings allowed in the fields. So CSV files cannot represent XML data perfec
 However many XML files are basically dataframes with only a little bit of extra
 structure. So what the program does is look for the largest dataframe-like structure
 in the XML file, pulls it out, and converts that. Children are folded into the CSV
-outout recursively.
+output recursively.
 
 So
 ```
