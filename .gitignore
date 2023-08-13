@@ -1,3 +1,9 @@
+# Build directory
+build/
+
+# Apple metatdata
+.DS_Store
+
 # Prerequisites
 *.d
 
