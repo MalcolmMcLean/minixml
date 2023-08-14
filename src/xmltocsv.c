@@ -149,6 +149,9 @@ int getdatatype(const char *str)
     char *end;
     int i;
     
+    if (str == NULL)
+        return TYPE_UNKNOWN;
+    
     for (i =0; str[i]; i++)
         if (!isspace((unsigned char)str[i]))
             break;
@@ -301,6 +304,7 @@ useattributes, int usechildren, int index)
          else if (fields->field[index+i].datatype == TYPE_NUMBER
             && type == TYPE_STRING)
             fields->field[index+i].datatype = type;
+        
         i++; 
       }
    }
@@ -372,12 +376,15 @@ static char *escapecsvstring(const char *str)
     int i;
     int j = 0;
     
+    if(!str)
+        return mystrdup("");
+    
     trimmed = trim(str);
     if (!trimmed)
         goto out_of_memory;
     if (strchr(trimmed, '\"') || strchr(trimmed, ','))
     {
-        len = strlen(trimmed) + mystrcount(trimmed, '\"' + 2 + 1);
+        len = strlen(trimmed) + mystrcount(trimmed, '\"') + 2 + 1;
         answer = malloc(len);
         if (!answer)
             goto out_of_memory;
@@ -419,6 +426,7 @@ static char *trim(const char *str)
         ;
     while (str[i])
         answer[j++] = str[i++];
+    answer[j++] = 0;
     while (j--)
     {
         if (!isspace((unsigned char)answer[j]))

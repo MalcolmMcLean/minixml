@@ -9,6 +9,8 @@
 #include <stdarg.h>
 #include <ctype.h>
 
+#define MAXRECURSIONLIMIT 100
+
 
 typedef struct xmlattribute
 {
@@ -50,6 +52,7 @@ typedef struct
   int set;
   char message[1024];
     struct lexer *lexer;
+    int recursiondepth;
 } ERROR;
 
 typedef struct lexer
@@ -69,9 +72,9 @@ static int stringaccess(void *ptr);
 void killxmlnode(XMLNODE *node);
 static void killxmlattribute(XMLATTRIBUTE *attr);
 
-static int isinitidentifier(int ch);
-static int iselementnamech(int ch);
-static int isattributenamech(int ch);
+static int is_initidentifier(int ch);
+static int is_elementnamech(int ch);
+static int is_attributenamech(int ch);
 
 static int string_init(STRING *s);
 static void string_push(STRING *s, int ch, ERROR *err);
@@ -92,6 +95,9 @@ static void skipbom(LEXER *lex, ERROR *err);
 static void skipunknowntag(LEXER *lex, ERROR *err);
 static void skipwhitespace(LEXER *lex, ERROR *err);
 
+static void initerror(ERROR *err);
+static void enterrecursion(ERROR *err);
+static void endrecursion(ERROR *err);
 static void reporterror(ERROR *err, const char *fmt, ...);
 
 static void initlexer(LEXER *lex, ERROR *err, int (*getch)(void *), void *ptr);
@@ -104,13 +110,11 @@ static int match(LEXER *lex, int token);
 XMLDOC *loadxmldoc2(const char *filename,char *errormessage, int Nerr)
 {
    FILE *fp;
-   ERROR error;
+    ERROR error;
    LEXER lexer;
    XMLDOC *answer = 0;
 
-   error.set = 0;
-   error.message[0] = 0;
-    error.lexer = 0;
+    initerror(&error);
 
    if (errormessage && Nerr > 0)
       errormessage[0] = 0;
@@ -139,9 +143,7 @@ XMLDOC *floadxmldoc2(FILE *fp, char *errormessage, int Nerr)
     LEXER lexer;
     XMLDOC *answer = 0;
 
-    error.set = 0;
-    error.message[0] = 0;
-     error.lexer = 0;
+    initerror(&error);
 
     if (errormessage && Nerr > 0)
        errormessage[0] = 0;
@@ -170,10 +172,7 @@ XMLDOC *xmldoc2fromstring(const char *str,char *errormessage, int Nout)
    XMLDOC *answer = 0;
    struct strbuff strbuf;
 
-   
-   error.set = 0;
-   error.message[0] = 0;
-    error.lexer = 0;
+    initerror(&error);
 
    if (errormessage && Nout > 0)
       errormessage[0] = 0;
@@ -419,8 +418,7 @@ char *xml_getnesteddata(XMLNODE *node)
 {
     ERROR error;
     STRING str;
-    error.set = 0;
-    error.lexer = 0;
+    initerror(&error);
     string_init(&str);
     getnestedata_r(node, &str, &error);
     return string_release(&str);
@@ -471,21 +469,21 @@ static void killxmlattribute(XMLATTRIBUTE *attr)
   }
 }
 
-static int isinitidentifier(int ch)
+static int is_initidentifier(int ch)
 {
    if (isalpha(ch) || ch == '_')
      return 1;
    return 0;
 }
 
-static int iselementnamech(int ch)
+static int is_elementnamech(int ch)
 {
-   if (isalpha(ch) || isdigit(ch) || ch == '_' || ch == '-' || ch == '.')
+   if (isalpha(ch) || isdigit(ch) || ch == '_' || ch == '-' || ch == '.' || ch == ':')
      return 1;
    return 0;
 }
 
-static int isattributenamech(int ch)
+static int is_attributenamech(int ch)
 {
    if (isalpha(ch) || isdigit(ch) || ch == '_' || ch == '-' || ch == '.' || ch == ':')
      return 1;
@@ -552,7 +550,14 @@ static char *string_release(STRING *s)
    char *answer;
 
    if (s->str == 0)
-     return 0;
+   {
+       s->str = malloc(1);
+       if (s->str)
+           s->str[0] = 0;
+       else
+           return 0;
+       
+   }
    answer = realloc(s->str, s->N + 1);
    s->str = 0;
    s->N = 0;
@@ -581,7 +586,7 @@ static XMLDOC *xmldocument(LEXER *lex, ERROR *err)
         if (!match(lex, '<'))
             reporterror(err, "can't find opening tag");
         ch = gettoken(lex);
-        if (isinitidentifier(ch))
+        if (is_initidentifier(ch))
         {
             node = xmlnode(lex, err);
             if (node)
@@ -622,6 +627,7 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
     
     if (err->set)
         return 0;
+    enterrecursion(err);
     
     string_init(&datastr);
     
@@ -645,6 +651,7 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
         node->position = 0;
         node->child = 0;
         node->next = 0;
+        endrecursion(err);
         return node;
     }
     else if (ch == '>')
@@ -675,7 +682,7 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
             {
                 match(lex, '<');
                 ch = gettoken(lex);
-                if (isinitidentifier(ch))
+                if (is_initidentifier(ch))
                 {
                     XMLNODE *child = xmlnode(lex, err);
                     if (!child)
@@ -696,6 +703,7 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
                         node->data = string_release(&datastr);
                         free(tag);
                         match(lex, '>');
+                        endrecursion(err);
                         return node;
                     }
                     else
@@ -719,9 +727,11 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
     }
 parse_error:
     reporterror(err, "error parsing element");
+    endrecursion(err);
     return 0;
 out_of_memory:
     reporterror(err, "out of memory");
+    endrecursion(err);
     return 0;
 }
 
@@ -767,7 +777,7 @@ static XMLATTRIBUTE *attributelist(LEXER *lex, ERROR *err)
     {
         skipwhitespace(lex, err);
         ch = gettoken(lex);
-        if (isinitidentifier(ch))
+        if (is_initidentifier(ch))
         {
             attr = xmlattribute(lex, err);
             if (!attr)
@@ -908,9 +918,9 @@ static char *attributename(LEXER *lex, ERROR *err)
     string_init(&str);
     
     ch = gettoken(lex);
-    if (!isinitidentifier(ch))
+    if (!is_initidentifier(ch))
       goto parse_error;
-    while (isattributenamech(ch))
+    while (is_attributenamech(ch))
     {
        match(lex, ch);
        string_push(&str, ch, err);
@@ -931,9 +941,9 @@ static char *elementname(LEXER *lex, ERROR *err)
    string_init(&str);
    
    ch = gettoken(lex);
-   if (!isinitidentifier(ch))
+   if (!is_initidentifier(ch))
      goto parse_error;
-   while (iselementnamech(ch))
+   while (is_elementnamech(ch))
    {
       match(lex, ch);
       string_push(&str, ch, err);
@@ -1007,6 +1017,7 @@ static void skipunknowntag(LEXER *lex, ERROR *err)
 {
     int ch;
     
+    enterrecursion(err);
     while ((ch = gettoken(lex)) != EOF)
     {
         match(lex, ch);
@@ -1015,6 +1026,7 @@ static void skipunknowntag(LEXER *lex, ERROR *err)
         if (ch == '>')
             break;
     }
+    endrecursion(err);
 }
 
 static void skipwhitespace(LEXER *lex, ERROR *err)
@@ -1025,6 +1037,31 @@ static void skipwhitespace(LEXER *lex, ERROR *err)
      match(lex, ch);
      ch = gettoken(lex);
    }
+}
+static void initerror(ERROR *err)
+{
+    err->set = 0;
+    err->message[0] = 0;
+    err->lexer = 0;
+    err->recursiondepth = 0;
+}
+
+static void enterrecursion(ERROR *err)
+{
+    err->recursiondepth++;
+    if (err->recursiondepth > MAXRECURSIONLIMIT)
+    {
+        reporterror(err, "nesting too deep");
+        if (err->lexer)
+            match(err->lexer, EOF);
+    }
+}
+
+static void endrecursion(ERROR *err)
+{
+    err->recursiondepth--;
+    if (err->recursiondepth < 0)
+        reporterror(err, "nesting problem");
 }
            
 static void reporterror(ERROR *err, const char *fmt, ...)
@@ -1130,7 +1167,7 @@ int xmlparser2main(int argc, char **argv)
     char error[1024];
     if (argc == 1)
     {
-        doc = xmldoc2fromstring("<!-- --><FRED attr=\"Fred\">Fred<JIM/>Bert<JIM/>Harry</FRED>", error, 1204);
+        doc = xmldoc2fromstring("<a><a><a><a><a><a><a><a><!-- --><FRED attr=\"Fred\">Fred<JIM/>Bert<JIM/>Harry</FRED>", error, 1204);
     }else
     {
         doc = loadxmldoc2(argv[1], error, 1024);
