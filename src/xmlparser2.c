@@ -166,7 +166,6 @@ static int fileaccess(void *ptr)
 
 XMLDOC *xmldoc2fromstring(const char *str,char *errormessage, int Nout)
 {
-   FILE *fp;
    ERROR error;
    LEXER lexer;
    XMLDOC *answer = 0;
@@ -737,10 +736,6 @@ out_of_memory:
 
 static XMLNODE *comment(LEXER *lex, ERROR *err)
 {
-    STRING str;
-    char *text;
-    
-    string_init(&str);
     char buff[4] = {0};
     int ch;
     if (!match(lex, '!'))
@@ -752,7 +747,6 @@ static XMLNODE *comment(LEXER *lex, ERROR *err)
     
     while ((ch = gettoken(lex)) != EOF)
     {
-        string_push(&str, ch, err);
         match(lex, ch);
         memmove(buff, buff+1, 3);
         buff[2] = ch;
