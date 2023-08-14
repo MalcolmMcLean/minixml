@@ -451,12 +451,12 @@ static int mystrcount(const char *str, int ch)
 
 void usage(void)
 {
-    printf("xmltocsv - converts xml files to csv files\n");
-    printf("Usage: xmltocsv [options] <infile.csv>\n");
-    printf("       Options: -ignorechildren - ignore child nodes\n");
-    printf("                -ignoreattributes - ignore attribute data\n");
-    printf("                -stdin - pipe input instead of reading a file\n");
-    printf("\n");
+    fprintf(stderr, "xmltocsv - converts xml files to csv files\n");
+    fprintf(stderr, "Usage: xmltocsv [options] <infile.csv>\n");
+    fprintf(stderr, "       Options: -ignorechildren - ignore child nodes\n");
+    fprintf(stderr, "                -ignoreattributes - ignore attribute data\n");
+    fprintf(stderr, "                -stdin - pipe input instead of reading a file\n");
+    fprintf(stderr, "\n");
     
     exit(EXIT_FAILURE);
 }
@@ -470,11 +470,13 @@ int main(int argc, char **argv)
     FIELDS *fields;
     OPTIONS *opt;
     char *filename = 0;
+    int help  = 0;
     int ignoreattributes = 0;
     int ignorechildren = 0;
     int pipe = 0;
     
     opt = options(argc, argv, 0);
+    help = opt_get(opt, "-help -h -H --help /H -?", 0);
     ignorechildren = opt_get(opt, "-ignorechildren", 0);
     ignoreattributes = opt_get(opt, "-ignoreattributes", 0);
     pipe = opt_get(opt, "-stdin", 0);
@@ -494,10 +496,16 @@ int main(int argc, char **argv)
     
     opt = 0;
     
+    if (help)
+        usage();
+    
     if (ignoreattributes && ignorechildren)
     {
         fprintf(stderr, "Warning if you ignore both attributes and children there will be no output\n");
     }
+    
+    if (!strcmp(filename, "-"))
+        pipe = 1;
     
    if (pipe)
        doc = floadxmldoc2(stdin, error, 1024);
@@ -520,5 +528,8 @@ int main(int argc, char **argv)
     else {
         fprintf(stderr, "Couldn't find a suitable array\n");
     }
+    
+    free(filename);
+    
    return 0;
 }

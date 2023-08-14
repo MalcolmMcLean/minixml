@@ -299,7 +299,7 @@ static void checkunusedoptions(OPTIONS *opt)
     }
  
   /* check if the first argument looks like an option */
-    if (N > 0 && opt->argv[opt->argc-N][0] == '-')
+    if (N > 0 && opt->argv[opt->argc-N][0] == '-' && strcmp(opt->argv[opt->argc-N], "-"))
         seterror(opt, "Unrecognised or duplicate option %s.", opt->argv[opt->argc-N]);
 }
 

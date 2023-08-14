@@ -1010,6 +1010,8 @@ static void skipunknowntag(LEXER *lex, ERROR *err)
     while ((ch = gettoken(lex)) != EOF)
     {
         match(lex, ch);
+        if (ch == '<')
+            skipunknowntag(lex, err);
         if (ch == '>')
             break;
     }
