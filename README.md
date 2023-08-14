@@ -6,7 +6,7 @@ Convert an XML file to a CSV (comma-separated value) file.
 xmltocsv [options] <inputfile.xml>
 
 options: -ignoreattributes - don't consider attribute data
-         -ignorechildren - dont consider child elements
+         -ignorechildren - don't consider child elements
          -stdin - pipe input from stdin instead of from a file
 ```
 
@@ -31,7 +31,7 @@ The code should be completely portable and build anywhere with a C compiler.
 
 ## Converting XML to CSV
 XML files have a tree structure whilst CSV files are a dataframe, or a 2-dimensional 
-data structure with rows representing records and colmns fields, with mixed numbers 
+data structure with rows representing records and columns fields, with mixed numbers 
 and strings allowed in the fields. So CSV files cannot represent XML data perfectly.
 However many XML files are basically dataframes with only a little bit of extra
 structure. So what the program does is look for the largest dataframe-like structure
@@ -54,9 +54,15 @@ to CSV. However we don't escape most strings. Whitespace is trimmed, but otherwi
 will appear as in the XML file.
 
 Sometimes you want to set up a pipeline. So pass the -stdin option to pipe the XML
-data from standard input, an domit the filename. It's not a very good pipeline 
-because, in the nature of XML, the entire document must be read in before the structure 
-can be analysed, but it should work on modern systems with plenty of memory.
+data from standard input, and omit the filename. Alternative you can use "-" as the 
+input file name, to denote stdin. It's not a very good pipeline because, in the nature 
+of XML, the entire document must be read in before the structure can be analysed, but 
+it should work on modern systems with plenty of memory.
 
 See how you get on.
 
+## Components
+All the code is authored by Malcolm McLean
+
+Both the XML parser and the options parser are modular and re-usable, and you might want
+to take them for other projects. 
