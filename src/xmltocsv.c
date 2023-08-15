@@ -426,7 +426,7 @@ static char *trim(const char *str)
         ;
     while (str[i])
         answer[j++] = str[i++];
-    answer[j++] = 0;
+    answer[j] = 0;
     while (j--)
     {
         if (!isspace((unsigned char)answer[j]))
