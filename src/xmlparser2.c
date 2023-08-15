@@ -93,8 +93,6 @@ static int fileaccess(void *ptr);
 static int utf16accessbe(void *ptr);
 static int utf16accessle(void *ptr);
 static int bbx_utf8_putch(char *out, int ch);
-static int fget16be(FILE *fp);
-static int fget16le(FILE *fp);
 static int stringaccess(void *ptr);
 
 void killxmlnode(XMLNODE *node);
@@ -177,7 +175,7 @@ XMLDOC *loadxmldoc2(const char *filename,char *errormessage, int Nerr)
        }
        else
        {
-           snprintf(errormessage, Nerr, "Cant dtermine text format of %s", filename);
+           snprintf(errormessage, Nerr, "Can't determine text format of %s", filename);
            return 0;
        }
        
@@ -249,13 +247,19 @@ static int utf16accessbe(void *ptr)
     struct utf16buff *up = ptr;
     int Nchars;
     int wch;
+    int ch;
     
     if (up->rack[up->pos])
         return up->rack[up->pos++];
     else {
-        wch = fget16be(up->fp);
+        wch = fgetc(up->fp);
         if (wch == EOF)
             return EOF;
+        wch *= 256;
+        ch = fgetc(up->fp);
+        if (ch == EOF)
+            return EOF;
+        wch |= ch;
         Nchars = bbx_utf8_putch(up->rack, wch);
         up->rack[Nchars] = 0;
         up->pos = 0;
@@ -269,13 +273,18 @@ static int utf16accessle(void *ptr)
     struct utf16buff *up = ptr;
     int Nchars;
     int wch;
+    int ch;
     
     if (up->rack[up->pos])
         return up->rack[up->pos++];
     else {
-        wch = fget16le(up->fp);
+        wch = fgetc(up->fp);
         if (wch == EOF)
             return EOF;
+        ch = fgetc(up->fp);
+        if (ch == EOF)
+            return EOF;
+        wch |= (ch * 256);
         Nchars = bbx_utf8_putch(up->rack, wch);
         up->rack[Nchars] = 0;
         up->pos = 0;
@@ -314,41 +323,7 @@ static int bbx_utf8_putch(char *out, int ch)
   return dest - out;
 }
 
-/**
-  Get a 16-bit big-endian signed integer from a stream.
 
-  Does not break, regardless of host integer representation.
-
-  @param[in] fp - pointer to a stream opened for reading in binary mode
-  @ returns the 16 bit value as an integer
-*/
-static int fget16be(FILE *fp)
-{
-    int c1, c2;
-
-    c2 = fgetc(fp);
-    c1 = fgetc(fp);
-
-    return ((c2 ^ 128) - 128) * 256 + c1;
-}
-
-/**
-Get a 16-bit little-endian signed integer from a stream.
-
-Does not break, regardless of host integer representation.
-
-@param[in] fp - pointer to a stream opened for reading in binary mode
-@ returns the 16 bit value as an integer
-*/
-static int fget16le(FILE *fp)
-{
-    int c1, c2;
-
-    c1 = fgetc(fp);
-    c2 = fgetc(fp);
-
-    return ((c2 ^ 128) - 128) * 256 + c1;
-}
 
 XMLDOC *xmldoc2fromstring(const char *str,char *errormessage, int Nout)
 {
