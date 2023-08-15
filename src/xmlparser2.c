@@ -55,6 +55,7 @@ typedef struct
     int recursiondepth;
 } ERROR;
 
+
 typedef struct lexer
 {
   int (*getch)(void *ptr);
@@ -65,6 +66,16 @@ typedef struct lexer
   int badmatch;
   ERROR *err;
 } LEXER;
+
+#define UNKNOWNSHRIEK 1000
+#define COMMENT 1001
+#define CDATA 1002
+#define INCLUDE 1002
+#define IGNORE 1003
+#define DOCTYPE 1004
+#define ELEMENT 1005
+#define ATTLIST 1006
+#define NOTATION 1007
 
 static int fileaccess(void *ptr);
 static int stringaccess(void *ptr);
@@ -88,9 +99,11 @@ static XMLATTRIBUTE *attributelist(LEXER *lex, ERROR *err);
 static XMLATTRIBUTE *xmlattribute(LEXER *lex, ERROR *err);
 static char *quotedstring(LEXER *lex, ERROR *err);
 static char *textspan(LEXER *lex, ERROR *err);
+static char *cdata(LEXER *lex, ERROR *err);
 static char *attributename(LEXER *lex, ERROR *err);
 static char *elementname(LEXER *lex, ERROR *err);
 static int escapechar(LEXER *lex, ERROR *err);
+static int shriektype(LEXER *lex, ERROR *err);
 static void skipbom(LEXER *lex, ERROR *err);
 static void skipunknowntag(LEXER *lex, ERROR *err);
 static void skipwhitespace(LEXER *lex, ERROR *err);
@@ -571,6 +584,7 @@ static XMLDOC *xmldocument(LEXER *lex, ERROR *err)
     XMLNODE *node;
     XMLDOC *doc;
     int ch;
+    int shriek;
     
     doc = malloc(sizeof(XMLDOC));
     if (!doc)
@@ -607,8 +621,13 @@ static XMLDOC *xmldocument(LEXER *lex, ERROR *err)
                 reporterror(err, "bad root node");
             }
         }
-        else {
-            skipunknowntag(lex, err);
+        else
+        {
+            shriek = shriektype(lex, err);
+            if (shriek == COMMENT)
+                comment(lex, err);
+            else
+                skipunknowntag(lex, err);
         }
     } while (ch != EOF);
     
@@ -624,6 +643,7 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
     XMLNODE *node = 0;
     XMLNODE *lastchild = 0;
     STRING datastr;
+    int shriek;
     
     if (err->set)
         return 0;
@@ -713,7 +733,16 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
                     }
                 }
                 else if (ch == '!'){
-                    comment(lex, err);
+                    shriek = shriektype(lex, err);
+                    if (shriek == COMMENT)
+                        comment(lex, err);
+                    else if(shriek == CDATA)
+                    {
+                        text = cdata(lex, err);
+                        if (text)
+                            string_concat(&datastr, text, err);
+                        free(text);
+                    }
                 }
                     
             }else{
@@ -737,31 +766,22 @@ out_of_memory:
 
 static XMLNODE *comment(LEXER *lex, ERROR *err)
 {
-    STRING str;
-    char *text;
-    
-    string_init(&str);
     char buff[4] = {0};
     int ch;
-    if (!match(lex, '!'))
-        goto parse_error;
-    if (!match(lex, '-'))
-        goto parse_error;
-    if (!match(lex, '-'))
-        goto parse_error;
+    int lineno;
+    
+    lineno = lex->lineno;
     
     while ((ch = gettoken(lex)) != EOF)
     {
-        string_push(&str, ch, err);
         match(lex, ch);
         memmove(buff, buff+1, 3);
         buff[2] = ch;
         if (!strcmp(buff, "-->"))
             return 0;
     }
-parse_error:
     
-    reporterror(err, "bad comment");
+    reporterror(err, "bad comment (starts line");
     return 0;
           
 }
@@ -910,6 +930,43 @@ static char *textspan(LEXER *lex, ERROR *err)
     return string_release(&str);
 }
 
+static char *cdata(LEXER *lex, ERROR *err)
+{
+    char buff[4] = {0};
+    int ch;
+    int i;
+    STRING str;
+    int lineno;
+    
+    lineno = lex->lineno;
+    
+    string_init(&str);
+    
+    match(lex, '[');
+    
+    for (i =0; i < 3; i++)
+    {
+        ch = gettoken(lex);
+        buff[i] = ch;
+        match(lex, ch);
+    }
+    
+    while ((ch = gettoken(lex)) != EOF)
+    {
+        string_push(&str, buff[0], err);
+        buff[0] = buff[1];
+        buff[1] = buff[2];
+        buff[2] = ch;
+        match(lex, ch);
+        if (!strcmp(buff, "]]>"))
+            return string_release(&str);
+    }
+    free (string_release(&str));
+    reporterror(err, "unterminated CDATA tag (starts line %d)", lineno);
+    
+    return 0;
+}
+
 static char *attributename(LEXER *lex, ERROR *err)
 {
     int ch;
@@ -997,6 +1054,80 @@ static int escapechar(LEXER *lex, ERROR *err)
 parse_error:
     free(escaped);
     return 0;
+}
+
+
+/*
+<!-- begins a comment, which ends with -->
+
+<![CDATA[ begins a CDATA section, which ends with ]]>
+
+<![INCLUDE[ and <![IGNORE[ begin conditional sections, which end with ]]>.
+
+<!DOCTYPE begins a document type declaration.
+
+<!ELEMENT begins an element type declaration.
+
+<!ATTLIST begins an attribute list declaration.
+
+<!ENTITY begins an entity declaration.
+
+<!NOTATION begins a notation declaration.
+*/
+
+static int shriektype(LEXER *lex, ERROR *err)
+{
+    char buff[32] = {0};
+    int ch;
+    int i  = 0;
+    
+    match(lex, '!');
+    buff[i++] = '!';
+    
+    while ((ch = gettoken(lex)) != EOF)
+    {
+        if (ch == '<' || ch == '>')
+            return UNKNOWNSHRIEK;
+        if (isspace(ch))
+            return UNKNOWNSHRIEK;
+        buff[i++] = ch;
+        if (i >= sizeof(buff))
+            break;
+        if (!strcmp(buff, "!--"))
+        {
+            match(lex, ch);
+            return COMMENT;
+        }
+        if (!strcmp(buff, "![CDATA["))
+            return  CDATA;
+        if (!strcmp(buff, "![INCLUDE["))
+            return INCLUDE;
+        if (!strcmp(buff, "![IGNORE["))
+            return IGNORE;
+        if (!strcmp(buff, "!DOCTYPE"))
+        {
+            match(lex, ch);
+            return DOCTYPE;
+        }
+        if (!strcmp(buff, "!ELEMENT"))
+        {
+            match(lex, ch);
+            return ELEMENT;
+        }
+        if (!strcmp(buff, "!ATTLIST"))
+        {
+            match(lex, ch);
+            return ATTLIST;
+        }
+        if (!strcmp(buff, "NOTATION"))
+        {
+            match(lex, ch);
+            return NOTATION;
+        }
+        match(lex, ch);
+    }
+    
+    return UNKNOWNSHRIEK;
 }
 
 static void skipbom(LEXER *lex, ERROR *err)
