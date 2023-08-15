@@ -352,7 +352,6 @@ static int fget16le(FILE *fp)
 
 XMLDOC *xmldoc2fromstring(const char *str,char *errormessage, int Nout)
 {
-   FILE *fp;
    ERROR error;
    LEXER lexer;
    XMLDOC *answer = 0;
