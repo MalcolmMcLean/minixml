@@ -40,6 +40,13 @@ struct strbuff
     int pos;
 };
 
+struct utf16buff
+{
+    char rack[8];
+    int pos;
+    FILE *fp;
+};
+
 typedef struct
 {
   char *str;
@@ -77,7 +84,17 @@ typedef struct lexer
 #define ATTLIST 1006
 #define NOTATION 1007
 
+#define FMT_UTF8 1
+#define FMT_UTF16LE 2
+#define FMT_UTF16BE 3
+
+static int gettextencoding(FILE *fp);
 static int fileaccess(void *ptr);
+static int utf16accessbe(void *ptr);
+static int utf16accessle(void *ptr);
+static int bbx_utf8_putch(char *out, int ch);
+static int fget16be(FILE *fp);
+static int fget16le(FILE *fp);
 static int stringaccess(void *ptr);
 
 void killxmlnode(XMLNODE *node);
@@ -100,6 +117,7 @@ static XMLATTRIBUTE *xmlattribute(LEXER *lex, ERROR *err);
 static char *quotedstring(LEXER *lex, ERROR *err);
 static char *textspan(LEXER *lex, ERROR *err);
 static char *cdata(LEXER *lex, ERROR *err);
+static char *processinginstruction(LEXER *lex, ERROR *err);
 static char *attributename(LEXER *lex, ERROR *err);
 static char *elementname(LEXER *lex, ERROR *err);
 static int escapechar(LEXER *lex, ERROR *err);
@@ -126,7 +144,9 @@ XMLDOC *loadxmldoc2(const char *filename,char *errormessage, int Nerr)
     ERROR error;
    LEXER lexer;
    XMLDOC *answer = 0;
-
+    int encoding;
+    struct utf16buff utf16buf = {0};
+    
     initerror(&error);
 
    if (errormessage && Nerr > 0)
@@ -140,7 +160,27 @@ XMLDOC *loadxmldoc2(const char *filename,char *errormessage, int Nerr)
    }
    else
    {
-      initlexer(&lexer, &error, fileaccess, fp);
+      encoding = gettextencoding(fp);
+      if (encoding == FMT_UTF8)
+      {
+          initlexer(&lexer, &error, fileaccess, fp);
+      }
+      else if (encoding == FMT_UTF16BE)
+      {
+          utf16buf.fp  = fp;
+          initlexer(&lexer, &error, utf16accessbe, &utf16buf);
+      }
+       else if (encoding == FMT_UTF16LE)
+       {
+           utf16buf.fp = fp;
+           initlexer(&lexer, &error, utf16accessle, &utf16buf);
+       }
+       else
+       {
+           snprintf(errormessage, Nerr, "Cant dtermine text format of %s", filename);
+           return 0;
+       }
+       
       answer = xmldocument(&lexer, &error);
       if (error.set)
       {
@@ -171,10 +211,143 @@ XMLDOC *floadxmldoc2(FILE *fp, char *errormessage, int Nerr)
     return answer;
 }
 
+static int gettextencoding(FILE *fp)
+{
+    long pos;
+    int ch1, ch2;
+    int answer = 0;
+    
+    pos = ftell(fp);
+    
+    ch1 = fgetc(fp);
+    ch2 = fgetc(fp);
+    
+    if (ch1 == 0xFF && ch2 == 0xFE)
+        return FMT_UTF16LE;
+    if (ch1 == 0xFE && ch2 == 0xFF)
+        return FMT_UTF16BE;
+    if (ch1 == 0)
+        answer = FMT_UTF16BE;
+    else if (ch2 == 0)
+        answer = FMT_UTF16LE;
+    else
+        answer = FMT_UTF8;
+    
+    fseek(fp, pos, SEEK_SET);
+    
+    return answer;
+}
+
 static int fileaccess(void *ptr)
 {
    FILE *fp = ptr;
    return fgetc(fp);
+}
+
+static int utf16accessbe(void *ptr)
+{
+    struct utf16buff *up = ptr;
+    int Nchars;
+    int wch;
+    
+    if (up->rack[up->pos])
+        return up->rack[up->pos++];
+    else {
+        wch = fget16be(up->fp);
+        if (wch == EOF)
+            return EOF;
+        Nchars = bbx_utf8_putch(up->rack, wch);
+        up->rack[Nchars] = 0;
+        up->pos = 0;
+        return up->rack[up->pos++];
+    }
+    
+}
+
+static int utf16accessle(void *ptr)
+{
+    struct utf16buff *up = ptr;
+    int Nchars;
+    int wch;
+    
+    if (up->rack[up->pos])
+        return up->rack[up->pos++];
+    else {
+        wch = fget16le(up->fp);
+        if (wch == EOF)
+            return EOF;
+        Nchars = bbx_utf8_putch(up->rack, wch);
+        up->rack[Nchars] = 0;
+        up->pos = 0;
+        return up->rack[up->pos++];
+    }
+    
+}
+
+static int bbx_utf8_putch(char *out, int ch)
+{
+  char *dest = out;
+  if (ch < 0x80)
+  {
+     *dest++ = (char)ch;
+  }
+  else if (ch < 0x800)
+  {
+    *dest++ = (ch>>6) | 0xC0;
+    *dest++ = (ch & 0x3F) | 0x80;
+  }
+  else if (ch < 0x10000)
+  {
+     *dest++ = (ch>>12) | 0xE0;
+     *dest++ = ((ch>>6) & 0x3F) | 0x80;
+     *dest++ = (ch & 0x3F) | 0x80;
+  }
+  else if (ch < 0x110000)
+  {
+     *dest++ = (ch>>18) | 0xF0;
+     *dest++ = ((ch>>12) & 0x3F) | 0x80;
+     *dest++ = ((ch>>6) & 0x3F) | 0x80;
+     *dest++ = (ch & 0x3F) | 0x80;
+  }
+  else
+    return 0;
+  return dest - out;
+}
+
+/**
+  Get a 16-bit big-endian signed integer from a stream.
+
+  Does not break, regardless of host integer representation.
+
+  @param[in] fp - pointer to a stream opened for reading in binary mode
+  @ returns the 16 bit value as an integer
+*/
+static int fget16be(FILE *fp)
+{
+    int c1, c2;
+
+    c2 = fgetc(fp);
+    c1 = fgetc(fp);
+
+    return ((c2 ^ 128) - 128) * 256 + c1;
+}
+
+/**
+Get a 16-bit little-endian signed integer from a stream.
+
+Does not break, regardless of host integer representation.
+
+@param[in] fp - pointer to a stream opened for reading in binary mode
+@ returns the 16 bit value as an integer
+*/
+static int fget16le(FILE *fp)
+{
+    int c1, c2;
+
+    c1 = fgetc(fp);
+    c2 = fgetc(fp);
+
+    return ((c2 ^ 128) - 128) * 256 + c1;
 }
 
 XMLDOC *xmldoc2fromstring(const char *str,char *errormessage, int Nout)
@@ -621,13 +794,22 @@ static XMLDOC *xmldocument(LEXER *lex, ERROR *err)
                 reporterror(err, "bad root node");
             }
         }
-        else
+        else if (ch == '!')
         {
             shriek = shriektype(lex, err);
             if (shriek == COMMENT)
                 comment(lex, err);
             else
                 skipunknowntag(lex, err);
+        }
+        else  if (ch == '?')
+        {
+            char *text;
+            text = processinginstruction(lex, err);
+            free(text);
+        }
+        else {
+            skipunknowntag(lex, err);
         }
     } while (ch != EOF);
     
@@ -732,7 +914,8 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
                         goto parse_error;
                     }
                 }
-                else if (ch == '!'){
+                else if (ch == '!')
+                {
                     shriek = shriektype(lex, err);
                     if (shriek == COMMENT)
                         comment(lex, err);
@@ -744,9 +927,15 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
                         free(text);
                     }
                 }
-                    
-            }else{
-                goto parse_error;
+                else if (ch == '?')
+                {
+                    text = processinginstruction(lex, err);
+                    free (text);
+                }
+                else
+                {
+                    goto parse_error;
+                }
             }
         } while (ch != EOF);
     }
@@ -963,6 +1152,35 @@ static char *cdata(LEXER *lex, ERROR *err)
     }
     free (string_release(&str));
     reporterror(err, "unterminated CDATA tag (starts line %d)", lineno);
+    
+    return 0;
+}
+
+static char *processinginstruction(LEXER *lex, ERROR *err)
+{
+    int ch;
+    STRING str;
+    int lineno;
+    
+    string_init(&str);
+    lineno = lex->lineno;
+    
+    match(lex, '?');
+    
+    while ((ch = gettoken(lex)) != EOF)
+    {
+        match(lex, ch);
+        if (ch == '?')
+        {
+            if (gettoken(lex) == '>')
+            {
+                match(lex, '>');
+                return string_release(&str);
+            }
+        }
+    }
+    reporterror(err, "<? tag not closed (starts line %d)", lineno);
+    free (string_release(&str));
     
     return 0;
 }
@@ -1298,11 +1516,13 @@ int xmlparser2main(int argc, char **argv)
     char error[1024];
     if (argc == 1)
     {
-        doc = xmldoc2fromstring("<a><a><a><a><a><a><a><a><!-- --><FRED attr=\"Fred\">Fred<JIM/>Bert<JIM/>Harry</FRED>", error, 1204);
+        doc = xmldoc2fromstring("<!-- --><FRED attr=\"Fred\">Fred<![CDATA[character > data]]><JIM/>Bert<JIM/>Harry</FRED>", error, 1204);
+        printf("%s\n", doc->root->data);
     }else
     {
         doc = loadxmldoc2(argv[1], error, 1024);
-        printf("%s\n", xml_getnesteddata(doc->root));
+        if (doc)
+            printf("%s\n", xml_getnesteddata(doc->root));
     }
     if (error[0])
         printf("%s\n", error);
