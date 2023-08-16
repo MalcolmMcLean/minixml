@@ -66,3 +66,6 @@ All the code is authored by Malcolm McLean
 
 Both the XML parser and the options parser are modular and re-usable, and you might want
 to take them for other projects. 
+
+[XML Parser docs](http://malcolmmclean.github.io/babyxrc/usingxmlparser.html).  
+[Options Parser docs](http://malcolmmclean.githubio.babyxrc/usingoptions,html).
