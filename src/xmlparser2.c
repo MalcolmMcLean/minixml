@@ -84,11 +84,12 @@ typedef struct lexer
 #define ATTLIST 1006
 #define NOTATION 1007
 
+#define FMT_UNKNOWN 0
 #define FMT_UTF8 1
 #define FMT_UTF16LE 2
 #define FMT_UTF16BE 3
 
-static int gettextencoding(FILE *fp);
+static int textencoding(FILE *fp);
 static int fileaccess(void *ptr);
 static int utf16accessbe(void *ptr);
 static int utf16accessle(void *ptr);
@@ -158,7 +159,7 @@ XMLDOC *loadxmldoc2(const char *filename,char *errormessage, int Nerr)
    }
    else
    {
-      encoding = gettextencoding(fp);
+      encoding = textencoding(fp);
       if (encoding == FMT_UTF8)
       {
           initlexer(&lexer, &error, fileaccess, fp);
@@ -193,13 +194,35 @@ XMLDOC *floadxmldoc2(FILE *fp, char *errormessage, int Nerr)
     ERROR error;
     LEXER lexer;
     XMLDOC *answer = 0;
+    int encoding;
+    struct utf16buff utf16buf = {0};
 
     initerror(&error);
 
     if (errormessage && Nerr > 0)
        errormessage[0] = 0;
+    
+    encoding = textencoding(fp);
+    if (encoding == FMT_UTF8)
+    {
+        initlexer(&lexer, &error, fileaccess, fp);
+    }
+    else if (encoding == FMT_UTF16BE)
+    {
+        utf16buf.fp  = fp;
+        initlexer(&lexer, &error, utf16accessbe, &utf16buf);
+    }
+     else if (encoding == FMT_UTF16LE)
+     {
+         utf16buf.fp = fp;
+         initlexer(&lexer, &error, utf16accessle, &utf16buf);
+     }
+     else
+     {
+         snprintf(errormessage, Nerr, "Can't determine text format of stream");
+         return 0;
+     }
 
-    initlexer(&lexer, &error, fileaccess, fp);
     answer = xmldocument(&lexer, &error);
     if (error.set)
     {
@@ -209,31 +232,111 @@ XMLDOC *floadxmldoc2(FILE *fp, char *errormessage, int Nerr)
     return answer;
 }
 
-static int gettextencoding(FILE *fp)
+/*
+ Get the text encoding, gobbling the the first '<'.
+ */
+static int textencoding(FILE *fp)
 {
     long pos;
     int ch1, ch2;
     int answer = 0;
     
-    pos = ftell(fp);
-    
     ch1 = fgetc(fp);
     ch2 = fgetc(fp);
     
-    if (ch1 == 0xFF && ch2 == 0xFE)
+    if (ch1 == '<' && ch2 != 0)
+    {
+        ungetc(ch2, fp);
+        return FMT_UTF8;
+    }
+    else if (ch1 == '<' && ch2 == 0)
         return FMT_UTF16LE;
-    if (ch1 == 0xFE && ch2 == 0xFF)
+    else if (ch1 == 0 && ch2 == '<')
         return FMT_UTF16BE;
-    if (ch1 == 0)
-        answer = FMT_UTF16BE;
-    else if (ch2 == 0)
-        answer = FMT_UTF16LE;
-    else
-        answer = FMT_UTF8;
-    
-    fseek(fp, pos, SEEK_SET);
-    
-    return answer;
+    else if (ch1 == 0xFF && ch2 == 0xFE)
+    {
+        ch1 = fgetc(fp);
+        ch2 = fgetc(fp);
+        while (ch1 + ch2 * 256 < 128 && isspace(ch1))
+        {
+            ch1 = fgetc(fp);
+            ch2 = fgetc(fp);
+        }
+        if (ch1 == '<' && ch2 == '0')
+            return FMT_UTF16LE;
+        else
+            return FMT_UNKNOWN;
+    }
+    else if (ch1 == 0xFE && ch2 == 0xFF)
+    {
+        ch1 = fgetc(fp);
+        ch2 = fgetc(fp);
+        while (ch1 * 256 + ch2 < 128 && isspace(ch2))
+        {
+            ch1 = fgetc(fp);
+            ch2 = fgetc(fp);
+        }
+        if (ch1 == 0 && ch2 == '<')
+            return FMT_UTF16BE;
+        else
+            return FMT_UNKNOWN;
+    }
+    else if (ch1 == 0xEF && ch2 == 0xBB)
+    {
+        ch1 = fgetc(fp);
+        ch2 = fgetc(fp);
+        if (ch1 == 0xBF)
+        {
+            while (isspace(ch2))
+                ch2 = fgetc(fp);
+            if (ch2 == '<')
+                return FMT_UTF8;
+            else
+                return FMT_UNKNOWN;
+        }
+        else
+            return FMT_UNKNOWN;
+    }
+    else if (isspace(ch1) && ch2 == 0)
+    {
+        while (ch1 + ch2 * 256 < 128 && isspace(ch1))
+        {
+            ch1 = fgetc(fp);
+            ch2 = fgetc(fp);
+        }
+        if (ch1 == '<' && ch2 == 0)
+            return FMT_UTF16LE;
+        else
+            return FMT_UNKNOWN;
+    }
+    else if (ch1 == 0 && isspace(ch2))
+    {
+        while (ch1 * 256 + ch2 < 128 && isspace(ch2))
+        {
+            ch1 = fgetc(fp);
+            ch2 = fgetc(fp);
+        }
+        if (ch1 == 0 && ch2 == '<')
+            return FMT_UTF16BE;
+        else
+            return FMT_UNKNOWN;
+    }
+    else if (ch1 != 0 && ch2 != 0)
+    {
+        while (isspace(ch1))
+        {
+            ch1 = ch2;
+            ch2 = fgetc(fp);
+        }
+        if (ch1 == '<')
+        {
+            ungetc(ch2, fp);
+            return FMT_UTF8;
+        }
+        else
+            return FMT_UNKNOWN;
+    }
+    return FMT_UNKNOWN;
 }
 
 static int fileaccess(void *ptr)
@@ -331,7 +434,8 @@ XMLDOC *xmldoc2fromstring(const char *str,char *errormessage, int Nout)
    LEXER lexer;
    XMLDOC *answer = 0;
    struct strbuff strbuf;
-
+    int ch;
+    
     initerror(&error);
 
    if (errormessage && Nout > 0)
@@ -339,6 +443,14 @@ XMLDOC *xmldoc2fromstring(const char *str,char *errormessage, int Nout)
 
     strbuf.str = str;
     strbuf.pos = 0;
+    /* the lexer has been hacked to support non-seekable streams, so
+     we need to pull out the first character */
+    ch = stringaccess(&strbuf);
+    if (ch != '<')
+    {
+        snprintf(errormessage, Nout, "string must start with a \'<\' character");
+        return 0;
+    }
     initlexer(&lexer, &error, stringaccess, &strbuf);
     answer = xmldocument(&lexer, &error);
     if (error.set)
@@ -1414,8 +1526,9 @@ static void initlexer(LEXER *lex, ERROR *err, int (*getch)(void *), void *ptr)
   lex->columnno = 0;
   lex->badmatch = 0;
   err->lexer = lex;
-        
-  lex->token = (*lex->getch)(lex->ptr);
+  /* hacked. Put a '<' sitting in the token becuase non-seekable UTF-16 streams
+   need to read this character to determine data format */
+    lex->token = '<'; //(*lex->getch)(lex->ptr);
   if (lex->token != EOF)
   {
     lex->lineno = 1;
@@ -1491,7 +1604,7 @@ int xmlparser2main(int argc, char **argv)
     if (argc == 1)
     {
         doc = xmldoc2fromstring("<!-- --><FRED attr=\"Fred\">Fred<![CDATA[character > data]]><JIM/>Bert<JIM/>Harry</FRED>", error, 1204);
-        printf("%s\n", doc->root->data);
+        //printf("%s\n", doc->root->data);
     }else
     {
         doc = loadxmldoc2(argv[1], error, 1024);
