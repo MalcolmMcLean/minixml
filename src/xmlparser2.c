@@ -42,7 +42,7 @@ struct strbuff
 
 struct utf16buff
 {
-    char rack[8];
+    unsigned char rack[8];
     int pos;
     FILE *fp;
 };
@@ -179,7 +179,7 @@ XMLDOC *loadxmldoc2(const char *filename,char *errormessage, int Nerr)
        }
        else if (encoding == FMT_EBCDIC)
        {
-          utf16buf.fp = fp;
+          utf16buf.fp = fp; 
           initlexer(&lexer, &error, ebcdicaccess, &utf16buf);
        }
        else
@@ -467,6 +467,8 @@ static int ebcdicaccess(void* ptr)
     else
     {
         ch = fgetc(up->fp);
+        if (ch == EOF)
+            return EOF;
         codepoint = ebcdictounicode(ch);
         Nchars = bbx_utf8_putch(up->rack, codepoint);
         up->rack[Nchars] = 0;
@@ -571,7 +573,7 @@ static int stringaccess(void *ptr)
 {
     struct strbuff *s = ptr;
     if (s->str[s->pos])
-        return s->str[s->pos++];
+        return (unsigned char) s->str[s->pos++];
     else
         return EOF;
 }
