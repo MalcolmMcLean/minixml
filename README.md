@@ -115,7 +115,7 @@ xml_Nchildren() gives the number of direct childen, and xml_Nchildren() gives th
 xml_getdescendants is a fishing expedition. It is essentially the XPath query ("//tag"), but implemented far more efficiently. It picks out all descendants with the given tag.
 
 #### Error reporting functions
-The strength of the mininxml parser is its error reporting support. 
+The strength of the minixml parser is its error reporting support. 
 ```
 int xml_getlineno(XMLNODE *node);
 XMLATTRIBUTE *xml_unknownattributes(XMLNODE *node, ...);
