@@ -25,6 +25,7 @@ typedef struct xmlnode
   XMLATTRIBUTE *attributes;  /* attributes */
   char *data;                /* data as ascii */
   int position;              /* position of the node within parent's data string */
+  int lineno;                /* line number of node in document */
   struct xmlnode *next;      /* sibling node */
   struct xmlnode *child;     /* first child node */
 } XMLNODE;
@@ -42,7 +43,7 @@ struct strbuff
 
 struct utf16buff
 {
-    unsigned char rack[8];
+    char rack[8];
     int pos;
     FILE *fp;
 };
@@ -88,15 +89,12 @@ typedef struct lexer
 #define FMT_UTF8 1
 #define FMT_UTF16LE 2
 #define FMT_UTF16BE 3
-#define FMT_EBCDIC 5
 
 static int textencoding(FILE *fp);
 static int fileaccess(void *ptr);
 static int utf16accessbe(void *ptr);
 static int utf16accessle(void *ptr);
-static int ebcdicaccess(void* ptr);
-static int ebcdictounicode(int ebcdicch);
-static int bbx_utf8_putch(char *out, long ch);
+static int bbx_utf8_putch(char *out, int ch);
 static int stringaccess(void *ptr);
 
 void killxmlnode(XMLNODE *node);
@@ -137,10 +135,12 @@ static void initlexer(LEXER *lex, ERROR *err, int (*getch)(void *), void *ptr);
 static int gettoken(LEXER *lex);
 static int match(LEXER *lex, int token);
 
+static char *mystrdup(const char *str);
 
 
 
-XMLDOC *loadxmldoc2(const char *filename,char *errormessage, int Nerr)
+
+XMLDOC *loadxmldoc(const char *filename,char *errormessage, int Nerr)
 {
    FILE *fp;
     ERROR error;
@@ -177,11 +177,6 @@ XMLDOC *loadxmldoc2(const char *filename,char *errormessage, int Nerr)
            utf16buf.fp = fp;
            initlexer(&lexer, &error, utf16accessle, &utf16buf);
        }
-       else if (encoding == FMT_EBCDIC)
-       {
-          utf16buf.fp = fp; 
-          initlexer(&lexer, &error, ebcdicaccess, &utf16buf);
-       }
        else
        {
            snprintf(errormessage, Nerr, "Can't determine text format of %s", filename);
@@ -197,7 +192,7 @@ XMLDOC *loadxmldoc2(const char *filename,char *errormessage, int Nerr)
    }   
 }
 
-XMLDOC *floadxmldoc2(FILE *fp, char *errormessage, int Nerr)
+XMLDOC *floadxmldoc(FILE *fp, char *errormessage, int Nerr)
 {
     ERROR error;
     LEXER lexer;
@@ -225,11 +220,6 @@ XMLDOC *floadxmldoc2(FILE *fp, char *errormessage, int Nerr)
          utf16buf.fp = fp;
          initlexer(&lexer, &error, utf16accessle, &utf16buf);
      }
-     else if (encoding == FMT_EBCDIC)
-     {
-        utf16buf.fp = fp;
-        initlexer(&lexer, &error, ebcdicaccess, &utf16buf);
-     }
      else
      {
          snprintf(errormessage, Nerr, "Can't determine text format of stream");
@@ -250,6 +240,7 @@ XMLDOC *floadxmldoc2(FILE *fp, char *errormessage, int Nerr)
  */
 static int textencoding(FILE *fp)
 {
+    long pos;
     int ch1, ch2;
     int answer = 0;
     
@@ -333,11 +324,6 @@ static int textencoding(FILE *fp)
         else
             return FMT_UNKNOWN;
     }
-    else if (ch1 == 0x4C)
-    {
-        ungetc(ch2, fp);
-        return FMT_EBCDIC;
-    }
     else if (ch1 != 0 && ch2 != 0)
     {
         while (isspace(ch1))
@@ -366,7 +352,7 @@ static int utf16accessbe(void *ptr)
 {
     struct utf16buff *up = ptr;
     int Nchars;
-    long wch;
+    int wch;
     int ch;
     
     if (up->rack[up->pos])
@@ -380,26 +366,6 @@ static int utf16accessbe(void *ptr)
         if (ch == EOF)
             return EOF;
         wch |= ch;
-        if ((wch & 0xFC00) == 0xD800)
-        {
-            int ch4 = getc(up->fp);
-            int ch3 = getc(up->fp);
-            int highsurrogate, lowsurrogate;
-
-            if (ch3 == EOF || ch4 == EOF)
-                return EOF;
-            highsurrogate = wch & 0x03FF;
-
-            if ((ch4 & 0xFC) == 0xDC)
-            {
-                lowsurrogate = ((ch4 * 256) + ch3) & 0x03FF;
-                wch = 0x10000 + highsurrogate * 1024 + lowsurrogate;
-            }
-            else
-            {
-                return EOF;
-            }
-        }
         Nchars = bbx_utf8_putch(up->rack, wch);
         up->rack[Nchars] = 0;
         up->pos = 0;
@@ -412,7 +378,7 @@ static int utf16accessle(void *ptr)
 {
     struct utf16buff *up = ptr;
     int Nchars;
-    long wch;
+    int wch;
     int ch;
     
     if (up->rack[up->pos])
@@ -425,28 +391,6 @@ static int utf16accessle(void *ptr)
         if (ch == EOF)
             return EOF;
         wch |= (ch * 256);
-
-        if ((wch & 0xFC00) == 0xD800)
-        {
-            int ch3 = getc(up->fp);
-            int ch4 = getc(up->fp);
-            int highsurrogate, lowsurrogate;
-
-            if (ch3 == EOF || ch4 == EOF)
-                return EOF;
-            highsurrogate = wch & 0x03FF;
-      
-            if ((ch4 & 0xFC) == 0xDC)
-            {
-                lowsurrogate = ((ch4 * 256) + ch3) & 0x03FF;
-                wch = 0x10000 + highsurrogate * 1024 + lowsurrogate;
-            }
-            else
-            {
-                return EOF;
-            }
-        }
-
         Nchars = bbx_utf8_putch(up->rack, wch);
         up->rack[Nchars] = 0;
         up->pos = 0;
@@ -455,57 +399,7 @@ static int utf16accessle(void *ptr)
     
 }
 
-static int ebcdicaccess(void* ptr)
-{
-    struct utf16buff *up = ptr;
-    int ch;
-    int Nchars;
-    int codepoint;
-
-    if (up->rack[up->pos])
-        return up->rack[up->pos++];
-    else
-    {
-        ch = fgetc(up->fp);
-        if (ch == EOF)
-            return EOF;
-        codepoint = ebcdictounicode(ch);
-        Nchars = bbx_utf8_putch(up->rack, codepoint);
-        up->rack[Nchars] = 0;
-        up->pos = 0;
-        return up->rack[up->pos++];
-    }
-
-}
-
-static int ebcdictounicode(int ebcdicch)
-{
-    static unsigned char table[256] =
-    {
-            0x00, 0x01, 0x02, 0x03, 0x9C, 0x09, 0x86, 0x7F, 0x97, 0x8D, 0x8E, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, // 0x00..0x0F
-            0x10, 0x11, 0x12, 0x13, 0x9D, 0x85, 0x08, 0x87, 0x18, 0x19, 0x92, 0x8F, 0x1C, 0x1D, 0x1E, 0x1F, // 0x10..0x1F
-            0x80, 0x81, 0x82, 0x83, 0x84, 0x0A, 0x17, 0x1B, 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x05, 0x06, 0x07, // 0x20..0x2F
-            0x90, 0x91, 0x16, 0x93, 0x94, 0x95, 0x96, 0x04, 0x98, 0x99, 0x9A, 0x9B, 0x14, 0x15, 0x9E, 0x1A, // 0x30..0x3F
-            0x20, 0xA0, 0xE2, 0xE4, 0xE0, 0xE1, 0xE3, 0xE5, 0xE7, 0xF1, 0xA2, 0x2E, 0x3C, 0x28, 0x2B, 0x7C, // 0x40..0x4F
-            0x26, 0xE9, 0xEA, 0xEB, 0xE8, 0xED, 0xEE, 0xEF, 0xEC, 0xDF, 0x21, 0x24, 0x2A, 0x29, 0x3B, 0xAC, // 0x50..0x5F
-            0x2D, 0x2F, 0xC2, 0xC4, 0xC0, 0xC1, 0xC3, 0xC5, 0xC7, 0xD1, 0xA6, 0x2C, 0x25, 0x5F, 0x3E, 0x3F, // 0x60..0x6F
-            0xF8, 0xC9, 0xCA, 0xCB, 0xC8, 0xCD, 0xCE, 0xCF, 0xCC, 0x60, 0x3A, 0x23, 0x40, 0x27, 0x3D, 0x22, // 0x70..0x7F
-            0xD8, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0xAB, 0xBB, 0xF0, 0xFD, 0xFE, 0xB1, // 0x80..0x8F
-            0xB0, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0xAA, 0xBA, 0xE6, 0xB8, 0xC6, 0xA4, // 0x90..0x9F
-            0xB5, 0x7E, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0xA1, 0xBF, 0xD0, 0xDD, 0xDE, 0xAE, // 0xA0..0xAF
-            0x5E, 0xA3, 0xA5, 0xB7, 0xA9, 0xA7, 0xB6, 0xBC, 0xBD, 0xBE, 0x5B, 0x5D, 0xAF, 0xA8, 0xB4, 0xD7, // 0xB0..0xBF
-            0x7B, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0xAD, 0xF4, 0xF6, 0xF2, 0xF3, 0xF5, // 0xC0..0xCF
-            0x7D, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0xB9, 0xFB, 0xFC, 0xF9, 0xFA, 0xFF, // 0xD0..0xDF
-            0x5C, 0xF7, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0xB2, 0xD4, 0xD6, 0xD2, 0xD3, 0xD5, // 0xE0..0xEF
-            0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0xB3, 0xDB, 0xDC, 0xD9, 0xDA, 0x9F, // 0xF0..0xFF
-    };
-    if (ebcdicch >= 0 && ebcdicch < 256)
-        return table[ebcdicch];
-    return EOF;
-}
-
-
-static int bbx_utf8_putch(char *out, long ch)
+static int bbx_utf8_putch(char *out, int ch)
 {
   char *dest = out;
   if (ch < 0x80)
@@ -514,30 +408,30 @@ static int bbx_utf8_putch(char *out, long ch)
   }
   else if (ch < 0x800)
   {
-    *dest++ = ((ch>>6) | 0xC0) & 0xFF;
+    *dest++ = (ch>>6) | 0xC0;
     *dest++ = (ch & 0x3F) | 0x80;
   }
   else if (ch < 0x10000)
   {
-     *dest++ = ((ch>>12) | 0xE0) & 0xFF;
+     *dest++ = (ch>>12) | 0xE0;
      *dest++ = ((ch>>6) & 0x3F) | 0x80;
      *dest++ = (ch & 0x3F) | 0x80;
   }
   else if (ch < 0x110000)
   {
-     *dest++ = ((ch>>18) | 0xF0) & 0xFF;
+     *dest++ = (ch>>18) | 0xF0;
      *dest++ = ((ch>>12) & 0x3F) | 0x80;
      *dest++ = ((ch>>6) & 0x3F) | 0x80;
      *dest++ = (ch & 0x3F) | 0x80;
   }
   else
     return 0;
-  return (int) (dest - out);
+  return dest - out;
 }
 
 
 
-XMLDOC *xmldoc2fromstring(const char *str,char *errormessage, int Nout)
+XMLDOC *xmldocfromstring(const char *str,char *errormessage, int Nerr)
 {
    ERROR error;
    LEXER lexer;
@@ -547,7 +441,7 @@ XMLDOC *xmldoc2fromstring(const char *str,char *errormessage, int Nout)
     
     initerror(&error);
 
-   if (errormessage && Nout > 0)
+   if (errormessage && Nerr > 0)
       errormessage[0] = 0;
 
     strbuf.str = str;
@@ -557,14 +451,14 @@ XMLDOC *xmldoc2fromstring(const char *str,char *errormessage, int Nout)
     ch = stringaccess(&strbuf);
     if (ch != '<')
     {
-        snprintf(errormessage, Nout, "string must start with a \'<\' character");
+        snprintf(errormessage, Nerr, "string must start with a \'<\' character");
         return 0;
     }
     initlexer(&lexer, &error, stringaccess, &strbuf);
     answer = xmldocument(&lexer, &error);
     if (error.set)
     {
-         snprintf(errormessage, Nout, "%s", error.message);
+         snprintf(errormessage, Nerr, "%s", error.message);
     }
     return answer;
 }
@@ -573,7 +467,7 @@ static int stringaccess(void *ptr)
 {
     struct strbuff *s = ptr;
     if (s->str[s->pos])
-        return (unsigned char) s->str[s->pos++];
+        return s->str[s->pos++];
     else
         return EOF;
 }
@@ -806,6 +700,124 @@ char *xml_getnesteddata(XMLNODE *node)
 }
 
 /*
+    get a node's line number.
+    (note this one is null-guarded because it is meant to be called in error conditions)
+ */
+int xml_getlineno(XMLNODE *node)
+{
+    if (node)
+        return node->lineno;
+    return -1;
+}
+/*
+  Report any attributes which are not on a list of knowwn attributes
+ 
+  Params: node the node to test
+        ... NULL-terminated list of known node names.
+   Returns: a list of unrecognised attribures as a deep copy, 0 if
+       there are none.
+    Notes:
+       Call as
+       XMLATTRIBUTE *badattr =  0;
+       char *end = 0;
+ 
+     badatttr = xml_unknownattributes(node, "faith", "hope", "charity", end);
+     if (badattr)
+         // We've got a node with some attributes we don't recognise
+    
+    Don't pass NULL for the terminator, becuase sometimes it expands to integer 0 and gets put on the argument list as 32 bits instead of 64.
+ */
+XMLATTRIBUTE *xml_unknownattributes(XMLNODE *node, ...)
+{
+    int *matches;
+    va_list args;
+    char *name;
+    XMLATTRIBUTE *attr;
+    XMLATTRIBUTE *copy = 0;
+    XMLATTRIBUTE *answer = 0;
+    int Nattributes = 0;
+    int i;
+    
+    for (attr = node->attributes; attr != NULL; attr = attr->next)
+        Nattributes++;
+    
+    if (Nattributes == 0)
+        return 0;
+    
+    matches = malloc(Nattributes * sizeof(int));
+    if (!matches)
+        return 0;
+    
+    for (i = 0; i < Nattributes; i++)
+        matches[i] = 0;
+    
+    va_start(args, node);
+    name = va_arg(args, char *);
+
+    while (name)
+    {
+       
+        i = 0;
+        for (attr = node->attributes; attr != NULL; attr = attr->next)
+        {
+            if (!strcmp(attr->name, name))
+                matches[i]++;
+            i++;
+        }
+        name = va_arg(args, char *);
+    }
+    va_end(args);
+    
+    i = 0;
+    for (attr = node->attributes; attr != NULL; attr = attr->next)
+    {
+        if (!matches[i])
+        {
+            copy = malloc(sizeof(XMLATTRIBUTE));
+            if (!copy)
+                goto out_of_memory;
+            copy->name = mystrdup(attr->name);
+            if (!copy->name)
+                goto out_of_memory;
+            copy->value = mystrdup(attr->value);
+            if (!copy->value)
+                goto out_of_memory;
+            copy->next = answer;
+            answer = copy;
+            copy = 0;
+        }
+        i++;
+    }
+    
+    copy = 0;
+    while (answer)
+    {
+        attr = answer;
+        answer = answer->next;
+        attr->next = copy;
+        copy = attr;
+    }
+     answer = copy;
+    
+    free(matches);
+    
+    return answer;
+    
+out_of_memory:
+    free(matches);
+    if (copy)
+    {
+        free(copy->name);
+        free(copy->value);
+        free(copy);
+    }
+    killxmlattribute(answer);
+    
+    return  0;
+}
+
+
+/*
   xml node destructor
   Notes: destroy siblings in a list, chilren recursively
     as children are unlikely to be nested very deep
@@ -882,7 +894,7 @@ static void trim(char *str)
         memmove(str, &str[i], strlen(str) -i + 1);
     if (str[0])
     {
-        i = (int) strlen(str) -1;
+        i = strlen(str) -1;
         while (i >= 0 && isspace((unsigned char)str[i]))
            str[i--] = 0;
     }
@@ -1021,6 +1033,7 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
     XMLNODE *lastchild = 0;
     STRING datastr;
     int shriek;
+    int lineno;
     
     if (err->set)
         return 0;
@@ -1028,6 +1041,7 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
     
     string_init(&datastr);
     
+    lineno = lex->lineno;
     tag = elementname(lex, err);
     if (!tag)
         goto parse_error;
@@ -1046,6 +1060,7 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
         node->attributes = attributes;
         node->data = 0;
         node->position = 0;
+        node->lineno = lineno;
         node->child = 0;
         node->next = 0;
         endrecursion(err);
@@ -1061,6 +1076,7 @@ static XMLNODE *xmlnode(LEXER *lex, ERROR *err)
         node->attributes = attributes;
         node->data = 0;
         node->position = 0;
+        node->lineno = lineno;
         node->child = 0;
         node->next = 0;
         tag = 0;
@@ -1680,6 +1696,18 @@ static int match(LEXER *lex, int token)
    }
 }
 
+static char *mystrdup(const char *str)
+{
+  char *answer;
+
+  answer = malloc(strlen(str) + 1);
+  if(answer)
+    strcpy(answer, str);
+
+  return answer;
+}
+
+
 static void printnode_r(XMLNODE *node, int depth)
 {
     int i;
@@ -1712,11 +1740,11 @@ int xmlparser2main(int argc, char **argv)
     char error[1024];
     if (argc == 1)
     {
-        doc = xmldoc2fromstring("<!-- --><FRED attr=\"Fred\">Fred<![CDATA[character > data]]><JIM/>Bert<JIM/>Harry</FRED>", error, 1204);
+        doc = xmldocfromstring("<!-- --><FRED attr=\"Fred\">Fred<![CDATA[character > data]]><JIM/>Bert<JIM/>Harry</FRED>", error, 1204);
         //printf("%s\n", doc->root->data);
     }else
     {
-        doc = loadxmldoc2(argv[1], error, 1024);
+        doc = loadxmldoc(argv[1], error, 1024);
         if (doc)
             printf("%s\n", xml_getnesteddata(doc->root));
     }

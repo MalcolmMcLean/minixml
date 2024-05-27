@@ -1,71 +1,68 @@
-# xmltocsv
-Convert an XML file to a CSV (comma-separated value) file.
-
-## Usage
-```
-xmltocsv [options] <inputfile.xml>
-
-options: -ignoreattributes - don't consider attribute data
-         -ignorechildren - don't consider child elements
-         -stdin - pipe input from stdin instead of from a file
-```
+# minixml
+A single file but powerful XML parser, and associated XPath engine
 
 ## Building
-If you have CMake, create a directory called "build" under the project
-root directory. Navigate to it, then type
-```
-cmake ..
-make
-```
-or
-```
-cmake -G <your favourite generator> ..
-```
-If you don't have CMake, simply navigate to the src directory and type
-```
-gcc *.c -lm
-```
-Or use your favourite C compiler.
+It is a single file C source for the XML parser, and another for the XPath engine. Simply take the source files and drop them into your own project.
 
 The code should be completely portable and build anywhere with a C compiler.
 
-## Converting XML to CSV
-XML files have a tree structure whilst CSV files are a dataframe, or a 2-dimensional 
-data structure with rows representing records and columns fields, with mixed numbers 
-and strings allowed in the fields. So CSV files cannot represent XML data perfectly.
-However many XML files are basically dataframes with only a little bit of extra
-structure. So what the program does is look for the largest dataframe-like structure
-in the XML file, pulls it out, and converts that. Children are folded into the CSV
-output recursively.
+## Basic usage
 
-So
+XML files have a tree structure.
+
+This is the structure of the nodes.
+
 ```
-xmltocsv inputfile.xml > outputfile.csv
+typedef struct xmlattribute
+{
+  char *name;                /* attribute name */
+  char *value;               /* attribute value (without quotes) */
+  struct xmlattribute *next; /* next pointer in linked list */
+} XMLATTRIBUTE;
+
+typedef struct xmlnode
+{
+  char *tag;                 /* tag to identify data type */
+  XMLATTRIBUTE *attributes;  /* attributes */
+  char *data;                /* data as ascii */
+  int position;              /* position of the node within parent's data string */
+  int lineno;                /* line number of node in document */
+  struct xmlnode *next;      /* sibling node */
+  struct xmlnode *child;     /* first child node */
+} XMLNODE;
+
+typedef struct
+{
+  XMLNODE *root;             /* the root node */
+} XMLDOC;
 ```
-should do what you want, most of the time.
+So to walk the tree, use the following template code.
 
-Some XML files structure data with child elements, and some use attributes. If the
-attributes are just noise, pass -ignoreattributes to ignore them. If all the data
-is in attributes and you want to ignore the child elements, pass -ignorechildren.
-(You can't ignore both attributes and children or you will have no data).
+```
+void walkttree_r(XMLNODE *node, int depth)
+{
+    int i;
+    
+    while (node)
+    {
+        for (i =0mi < depth; i++)
+          printf("\t");
+        printf("Tag %s line %d\n", xml_gettag(node), xml_getlineno(node));
+        
+        if (node->child)
+            walktree_r(node->child, depth + 1);
+        node->node->next;
+    }
+}
 
-Strings containing quotation marks or commas need to be escaped before writing
-to CSV. However we don't escape most strings. Whitespace is trimmed, but otherwise they
-will appear as in the XML file.
+```
 
-Sometimes you want to set up a pipeline. So pass the -stdin option to pipe the XML
-data from standard input, and omit the filename. Alternative you can use "-" as the 
-input file name, to denote stdin. It's not a very good pipeline because, in the nature 
-of XML, the entire document must be read in before the structure can be analysed, but 
-it should work on modern systems with plenty of memory.
+Very simple and easy.
 
-See how you get on.
-
-## Components
+## Copyright
 All the code is authored by Malcolm McLean
 
-Both the XML parser and the options parser are modular and re-usable, and you might want
-to take them for other projects. 
+It is available as a public service for any use.
 
 [XML Parser docs](http://malcolmmclean.github.io/babyxrc/usingxmlparser.html).  
-[Options Parser docs](http://malcolmmclean.github.io/babyxrc/usingoptions.html).
+
