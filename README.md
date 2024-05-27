@@ -130,8 +130,9 @@ char *end == NULL;
 badattr = xml_unknownattributes(node, "mytag", "faith", "hope" "charity", end);
 if (badattr)
 {
-   printf("Node <mytag> line *d only attributes allowed are faith, hope and charity", xml_getlineno(node));
-   for (attr = badatttr; attr !- NULL; attr = attr->next)
+   printf("Node <mytag> line %d only attributes allowed are faith, hope and charity",
+                xml_getlineno(node));
+   for (attr = badatttr; attr != NULL; attr = attr->next)
    {
       printf("Bad attribute name: %s value: %s\n", attr->name, attr-value);
    }
