@@ -72,11 +72,11 @@ XMLDOC *xmldocfromstring(const char *str,char *errormessage, int Nerr);
    
 They return an XML document on success, NULL on fail. xmldocfromstring has to be passed a string encoded in UTF-8, which usually mrenas plain ASCII. The error message is a buffer for diagnostics if thing go wrong, which is often very important for the user.
 
-Here's a example program.
+Here's an example program.
 
 ```
 #include "xmparser2.h"
-"
+
 int main(int argc, char **argv)
 {
     XMLDOC *doc;
@@ -124,16 +124,16 @@ XMLATTRIBUTE *xml_unknownattributes(XMLNODE *node, ...);
 xml_getlineno() is a vital little function when reporting any error in a large XML file to the user. He must know the line at which the bad element occurred, so minixml keeps track of this. And whilst you will naturally detect unknown tags whilst walking the tree, detecting unknown attributes is a little trickier. So minixml provides a handy little function for you.
 ```
 XLMATTRIBUTE *badattr;
+XMLATTRIBUTE *attr;
 char *end == NULL;
 
-badattr = xml_unknownattrubite(node, "mytag", "faith", "hope" "charity", end);
+badattr = xml_unknownattributes(node, "mytag", "faith", "hope" "charity", end);
 if (badattr)
 {
-   printf("Node mytag lne *d only atttrinutes allowed are faith, hope and charity", xml_getlineno(node));
-   while(badattr)
+   printf("Node <mytag> line *d only attributes allowed are faith, hope and charity", xml_getlineno(node));
+   for (attr = badatttr; attr !- NULL; attr = attr->next)
    {
-      printf("NBad attribue name ]: %s value %s\n", badattr->name, badattr-value);
-      badattr = badattr->next;
+      printf("Bad attribute name: %s value: %s\n", attr->name, attr-value);
    }
 }
 ```
