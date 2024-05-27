@@ -130,7 +130,7 @@ char *end == NULL;
 badattr = xml_unknownattributes(node, "mytag", "faith", "hope" "charity", end);
 if (badattr)
 {
-   printf("Node <mytag> line %d only attributes allowed are faith, hope and charity",
+   printf("Node <mytag> line %d only attributes allowed are faith, hope and charity\n",
                 xml_getlineno(node));
    for (attr = badatttr; attr != NULL; attr = attr->next)
    {
