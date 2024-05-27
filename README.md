@@ -12,7 +12,7 @@ XML files have a tree structure.
 
 This is the structure of the nodes.
 
-```
+```c
 typedef struct xmlattribute
 {
   char *name;                /* attribute name */
@@ -38,7 +38,7 @@ typedef struct
 ```
 So to walk the tree, use the following template code.
 
-```
+```c
 void walktree_r(XMLNODE *node, int depth)
 {
     int i;
@@ -63,7 +63,7 @@ The loaders are the only non-trivial functions in the file. They are extremely p
 
 There are three loaders
 
-```
+```c
 XMLDOC *loadxmldoc(const char *fname, char *errormessage, int Nerr);
 XMLDOC *floadxmldoc(FILE *fp, char *errormessage, int Nerr);
 XMLDOC *xmldocfromstring(const char *str,char *errormessage, int Nerr);
@@ -73,7 +73,7 @@ They return an XML document on success, NULL on fail. xmldocfromstring has to be
 
 Here's an example program.
 
-```
+```c
 #include "xmparser2.h"
 
 int main(int argc, char **argv)
@@ -100,7 +100,7 @@ int main(int argc, char **argv)
 ### Other functions
 
 #### Access functions
-```
+```c
 const char *xml_gettag(XMLNODE *node);
 const char *xml_getdata(XMLNODE *node);
 const char *xml_getattribute(XMLNODE *node, const char *attr);
@@ -116,13 +116,13 @@ xml_getdescendants is a fishing expedition. It is essentially the XPath query ("
 
 #### Error reporting functions
 The strength of the minixml parser is its error reporting support. 
-```
+```c
 int xml_getlineno(XMLNODE *node);
 XMLATTRIBUTE *xml_unknownattributes(XMLNODE *node, ...);
 ```
 
 xml_getlineno() is a vital little function when reporting any error in a large XML file to the user. He must know the line at which the bad element occurred, so minixml keeps track of this. And whilst you will naturally detect unknown tags whilst walking the tree, detecting unknown attributes is a little trickier. So minixml provides a handy little function for you.
-```
+```c
 XLMATTRIBUTE *badattr;
 XMLATTRIBUTE *attr;
 char *end == NULL;
