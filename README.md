@@ -125,7 +125,7 @@ xml_getlineno() is a vital little function when reporting any error in a large X
 ```c
 XLMATTRIBUTE *badattr;
 XMLATTRIBUTE *attr;
-char *end == NULL;
+char *end = NULL;
 
 badattr = xml_unknownattributes(node, "mytag", "faith", "hope" "charity", end);
 if (badattr)
