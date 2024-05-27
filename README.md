@@ -39,7 +39,7 @@ typedef struct
 So to walk the tree, use the following template code.
 
 ```
-void walkttree_r(XMLNODE *node, int depth)
+void walktree_r(XMLNODE *node, int depth)
 {
     int i;
     
@@ -51,10 +51,9 @@ void walkttree_r(XMLNODE *node, int depth)
         
         if (node->child)
             walktree_r(node->child, depth + 1);
-        node->node->next;
+        node = node->next;
     }
 }
-
 ```
 
 Very simple and easy.
@@ -80,19 +79,20 @@ Here's an example program.
 int main(int argc, char **argv)
 {
     XMLDOC *doc;
-    int error[1o24];
     
+    char error[1024];
+       
     if (argc != 2)
-       return EXIT_FAILURE;
+          return EXIT_FAILURE;
     doc = loadxmldoc(argv[1], error, 1024);
     if (!doc)
     {
-        fprintf(stderr, "%s\n, error);
+        fprintf(stderr, "%s\n", error);
         return EXIT_FAILURE;
     }
     walktree_r(xml_getroot(doc), 0);
     killxmldoc(doc);
-    
+       
     return 0;
 }
 ```  

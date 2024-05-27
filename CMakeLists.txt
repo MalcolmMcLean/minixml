@@ -2,31 +2,32 @@
 ## Root CMakeLists.txt
 ## #################################################################
 
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
 
-project(xmltocsv)
+project(testminixml)
 
 if(CMAKE_SYSTEM_NAME MATCHES Windows)
 	add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 endif()
 
-# Build the XML to CSV converter
+# Build the XML Parser tests
 
-file( GLOB BBX_COMMON src/*.c )
-file( GLOB BBX_COMMONH src/*.h )
+file( GLOB XML_COMMON src/*.c )
+file( GLOB XML_COMMONH src/*.h )
 
-set( bbx_includes "")
-set( bbx_sources "")
-list(APPEND bbx_sources ${BBX_COMMON} )
-list(APPEND bbx_sources ${BBX_COMMONH} )
-list(APPEND bbx_includes "src") 
+set( xml_includes "")
+set( xml_sources "")
+list(APPEND xml_sources ${XML_COMMON} )
+list(APPEND xml_sources ${XML_COMMONH} )
+list(APPEND xml_includes "src") 
 
 set( libs "")
 if(CMAKE_SYSTEM_NAME MATCHES Linux)
         list(APPEND libs m)
 endif()
 
-add_executable( "xmltocsv" ${bbx_sources} ${bbx_headers} )
-target_link_libraries( "xmltocsv" ${libs} )
+add_executable( "simpletest" ${xml_sources} ${xml_headers} "TestCode/simpletest.c")
+target_include_directories("simpletest" SYSTEM PRIVATE ${xml_includes})
+target_link_libraries( "simpletest" ${libs} )
 
 
