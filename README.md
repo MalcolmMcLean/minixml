@@ -69,7 +69,7 @@ XMLDOC *floadxmldoc(FILE *fp, char *errormessage, int Nerr);
 XMLDOC *xmldocfromstring(const char *str,char *errormessage, int Nerr);
 ```
    
-They return an XML document on success, NULL on fail. xmldocfromstring has to be passed a string encoded in UTF-8, which usually mrenas plain ASCII. The error message is a buffer for diagnostics if thing go wrong, which is often very important for the user.
+They return an XML document on success, NULL on fail. xmldocfromstring has to be passed a string encoded in UTF-8, which usually means plain ASCII. The error message is a buffer for diagnostics if thing go wrong, which is often very important for the user.
 
 Here's an example program.
 
