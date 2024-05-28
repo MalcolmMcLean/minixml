@@ -9,8 +9,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "text_encoding_detect.h"
-
+/*
+ strdup dtop in replacement
+ */
 static char *mystrdup(const char *str)
 {
   char *answer;
@@ -22,12 +23,34 @@ static char *mystrdup(const char *str)
   return answer;
 }
 
+/*
+    Concatenate two strings, returuning an allocated result.
+ */
+static char *mystrconcat(const char *prefix, const char *suffix)
+{
+    int lena, lenb;
+    char *answer;
+    
+    lena = (int) strlen(prefix);
+    lenb = (int) strlen(suffix);
+    answer = malloc(lena + lenb + 1);
+    if (answer)
+    {
+        strcpy(answer, prefix);
+        strcpy(answer + lena, suffix);
+    }
+    return  answer;
+}
 
-char *getfilename(const char *path)
+
+/*
+   get the filename at the end if a path
+ */
+static char *getfilename(const char *path)
 {
     const char *answer;
     
-    answer = strrchr(answer, '/');
+    answer = strrchr(path, '/');
     if (answer)
         answer = answer + 1;
     else
@@ -40,7 +63,7 @@ char *getfilename(const char *path)
   load a text file into memory
 
 */
-char *fslurp(FILE *fp)
+static char *fslurp(FILE *fp)
 {
   char *answer;
   char *temp;
@@ -80,37 +103,98 @@ char *fslurp(FILE *fp)
     return answer;
 }
 
-
-static char *mystrconcat(const char *prefix, const char *suffix)
+/*
+  Load a binary file into memory
+ */
+static unsigned char *slurpb(const char *fname, int *len)
 {
-    int lena, lenb;
-    char *answer;
-    
-    lena = (int) strlen(prefix);
-    lenb = (int) strlen(suffix);
-    answer = malloc(lena + lenb + 1);
-    if (answer)
+    FILE *fp;
+    unsigned char *answer = 0;
+    unsigned char *temp;
+    int capacity = 1024;
+    int N = 0;
+    int ch;
+
+    fp = fopen(fname, "rb");
+    if (!fp)
     {
-        strcpy(answer, prefix);
-        strcpy(answer + lena, suffix);
+        *len = -2;
+        return 0;
     }
-    return  answer;
+    answer = malloc(capacity);
+    if (!answer)
+        goto out_of_memory;
+    while ( (ch = fgetc(fp)) != EOF)
+    {
+        answer[N++] = ch;
+        if (N >= capacity)
+        {
+            temp = realloc(answer, capacity + capacity / 2);
+            if (!temp)
+                goto out_of_memory;
+            answer = temp;
+            capacity = capacity + capacity / 2;
+        }
+    }
+    *len = N;
+    fclose(fp);
+    return answer;
+out_of_memory:
+    fclose(fp);
+    *len = -1;
+    free(answer);
+    return 0;
 }
 
-int is_regular_file(const char *path)
+
+/*
+  is a file binary?
+ */
+static int is_binary(const char *path)
+{
+    int answer = 0;
+    int ch;
+    FILE *fp;
+    
+    fp = fopen(path, "rb");
+    if (!fp)
+        return 0;
+    while ((ch = fgetc(fp)) != EOF)
+    {
+       if (ch > 127)
+       {
+           answer = 1;
+           break;
+       }
+    }
+    fclose(fp);
+    return answer;
+}
+
+/*
+    is a file a regular file ?
+ */
+static int is_regular_file(const char *path)
 {
     struct stat path_stat;
     stat(path, &path_stat);
     return S_ISREG(path_stat.st_mode);
 }
 
-int isDirectory(const char *path) {
+/*
+  is a file a directory ?
+ */
+static int is_directory(const char *path)
+{
    struct stat statbuf;
    if (stat(path, &statbuf) != 0)
        return 0;
    return S_ISDIR(statbuf.st_mode);
 }
 
+/*
+   Escape a string to write as XML
+ */
 static char *xml_escape(const char *data)
 {
     int i;
@@ -151,20 +235,172 @@ out_of_memory:
     return 0;
 }
 
+/*
+    decode a uuencoded string to binary
+ */
+unsigned char *uudecodestr(const char *uucode, int *N)
+{
+    int Nmaxout;
+    unsigned char *out;
+    int ix = 0;
+    int jx = 0;
+    int k;
+    int i;
+    
+    Nmaxout = ((int)strlen(uucode)/60 +1) * 45;
+    out = malloc(Nmaxout);
+    
+    while( uucode[ix] )
+    {
+        // Get a line of the src text file.
+        char acSrcData[128];
+        
+        k = 0;
+        while (uucode[ix] != '\n' && uucode[ix])
+        {
+            acSrcData[k++] = uucode[ix++];
+            if (k > 126)
+                goto error_exit;
+        }
+        acSrcData[k++] = 0;
+        if (uucode[ix])
+            ix++;
+        if( strlen( acSrcData ) == 0 )
+        {
+            // continue;
+        }
+        else if( acSrcData[0] > 32  &&  acSrcData[0] <= 77 )
+        {
+            int knBytesToWrite = (int)( acSrcData[0] - 32 );
+            unsigned char acDstData[45];
+            int nDstIndex = 0;
+
+            for( int i = 1; i < strlen( acSrcData ); i += 4 )
+            {
+                int j;
+                int anSrc1[4];
+
+                for( j = 0; j < 4; ++j )
+                {
+                    const char c = acSrcData[i + j];
+
+                    if( c < 32  ||  c > 96 )
+                    {
+                        break;
+                    }
+
+                    anSrc1[j] = (int)( ( c - 32 ) & 63);
+                }
+
+                for( ; j < 4; ++j )
+                {
+                    anSrc1[j] = 0;
+                }
+
+                int k = 0;
+
+                for( j = 0; j < 4; ++j )
+                {
+                    k |= ( anSrc1[j] << ( j * 6 ) );
+                }
+
+                for( j = 0; j < 3; ++j )
+                {
+                    acDstData[nDstIndex++] = (unsigned char)( k >> ( j * 8 ) );
+                }
+            }
+
+            for (i = 0; i < knBytesToWrite; i++)
+                out[jx++] = acDstData[i];
+        }
+    }
+    
+    if (N)
+        *N = jx;
+
+    return out;
+    
+error_exit:
+    free(out);
+    if (N)
+        *N = -1;
+    return 0;
+}
+
+/*
+    encode binary to text using uuencoding.
+ */
+char *uuencodestr(const unsigned char *binary, int N)
+{
+    char acTable[64];
+    int i;
+    int j = 0;
+    char *out = 0;
+    int Nleft;
+    int Nout;
+    
+    acTable[0] = '`';    // We could use a space instead.
+
+    for( i = 1; i < 64; ++i )
+    {
+        acTable[i] = (char)( i + 32 );
+    }
+    
+    Nout = (N/45 + 1) * (15 * 4 + 1 + 1);
+    out = malloc(Nout + 1);
+    if (!out)
+        goto out_of_memory;
+    
+    Nleft = N;
+    while( Nleft > 0 )
+    {
+        unsigned char aucSrcData[45];
+        int knBytesRead = Nleft > 45 ? 45 : Nleft;
+
+        memcpy(aucSrcData, binary + N - Nleft, knBytesRead);
+        
+        out[j++] = acTable[knBytesRead];
+
+        for( i = 0; i < knBytesRead; i += 3 )
+        {
+            unsigned long k = (unsigned int)aucSrcData[i]
++ ( (unsigned long)aucSrcData[i + 1] << 8 ) + ( (unsigned long)aucSrcData[i
++ 2] << 16 );
+
+            out[j++] = acTable[k & 63];
+            out[j++] = acTable[(k >> 6) & 63];
+            out[j++] = acTable[(k >> 12) & 63];
+            out[j++] = acTable[k >> 18];
+        }
+        out[j++] = '\n';
+        Nleft -= knBytesRead;
+    }
+    out[j++] = 0;
+    
+    return out;
+    
+out_of_memory:
+    return 0;
+}
+
+
 int writetextfile(FILE *fpout, const char *fname)
 {
     FILE *fp = 0;
     char *text = 0;
     char *xmltext = 0;
     int i;
-    
-    
+
     fp = fopen(fname, "r");
     text = fslurp(fp);
+    if (!text)
+        goto out_of_memory;
     fclose(fp);
     fp = 0;
     
     xmltext = xml_escape(text);
+    if (!xmltext)
+        goto out_of_memory;
     for (i=0; xmltext[i];i++)
         fputc(xmltext[i], fpout);
     
@@ -174,28 +410,56 @@ int writetextfile(FILE *fpout, const char *fname)
     return 0;
     
 out_of_memory:
+    fclose(fp);
     free(text);
     free(xmltext);
     
     return 0;
 }
 
+int writebinaryfile(FILE *fpout, const char *fname)
+{
+    int N;
+    unsigned char *binary = 0;
+    char *uucode = 0;
+    int i;
+    
+    binary = slurpb(fname, &N);
+    if (!binary)
+        goto out_of_memory;
+    uucode = uuencodestr(binary,N);
+    if (!uucode)
+        goto out_of_memory;
+    fprintf(fpout, "<![CDATA[");
+    for (i = 0; uucode[i];i++)
+        fputc(uucode[i], fpout);
+    fprintf(fpout, "]]>");
+    free(binary);
+    free(uucode);
+    
+    return 0;
+out_of_memory:
+    free(binary);
+    free(uucode);
+    return -1;
+}
+
 void processregularfile(const char *path, int depth)
 {
     int error;
-    TextEncoding encoding;
     char *filename = 0;
     char *xmlfilename = 0;
     int i;
     
-    encoding = DetectTextFileEncoding(path, &error);
-    if (error)
-        return;
-    
     filename = getfilename(path);
+    if (!filename)
+        goto out_of_memory;
     xmlfilename = xml_escape(filename);
+    if (!xmlfilename)
+        goto out_of_memory;
     
-    if (encoding == TEXTENC_ASCII || encoding || TEXTENC_UTF8_NOBOM)
+    
+    if (!is_binary(path))
     {
         for (i = 0; i <depth; i++)
             printf("\t");
@@ -206,7 +470,24 @@ void processregularfile(const char *path, int depth)
             printf("\t");
         printf("</file>\n");
     }
-
+    else
+    {
+        for (i = 0; i <depth; i++)
+            printf("\t");
+        printf("<file name=\"%s\" type=\"binary\">\n", xmlfilename);
+        writebinaryfile(stdout, path);
+        printf("\n");
+        for (i= 0; i <depth;i++)
+            printf("\t");
+        printf("</file>\n");
+    }
+    free(filename);
+    free(xmlfilename);
+    return;
+    
+out_of_memory:
+    free(filename);
+    free(xmlfilename);
 }
 
 void processdirectory_r(const char *path, int depth)
@@ -219,10 +500,11 @@ void processdirectory_r(const char *path, int depth)
     int i;
 
     pathslash = mystrconcat(path, "/");
-
-
+    if (!pathslash)
+        goto out_of_memory;
+    
     if ((dirp = opendir(path)) == NULL) {
-        perror("couldn't open '.'");
+        perror("couldn't open directory");
         return;
     }
 
@@ -230,34 +512,37 @@ void processdirectory_r(const char *path, int depth)
     do {
         errno = 0;
         if ((dp = readdir(dirp)) != NULL) {
-            
           filepath = mystrconcat(pathslash, dp->d_name);
-          if (isDirectory(filepath) && dp->d_name[0] != '.')
+          if (is_directory(filepath) && dp->d_name[0] != '.')
           {
               xmlfilename = xml_escape(dp->d_name);
-              for (i=0;i<depth;i++)
+              if (!xmlfilename)
+                  goto out_of_memory;
+              for (i = 0; i < depth; i++)
                       printf("\t");
               printf("<directory name=\"%s\">\n", xmlfilename);
               processdirectory_r(filepath, depth +1);
-              for (i=0;i<depth;i++)
+              for (i = 0; i < depth; i++)
                       printf("\t");
               printf("</directory>\n");
               free(xmlfilename);
               xmlfilename = 0;
           }
-            else if (is_regular_file(filepath))
+          else if (dp->d_name[0] != '.' && is_regular_file(filepath))
                 processregularfile(filepath, depth);
           free(filepath);
-
         }
     } while (dp != NULL);
-
 
     if (errno != 0)
         perror("error reading directory");
 
+    free(pathslash);
     closedir(dirp);
     return;
+out_of_memory:
+    free(pathslash);
+    closedir(dirp);
 }
 
 int directorytoxml(const char *directory)
@@ -265,7 +550,7 @@ int directorytoxml(const char *directory)
     char *filename= 0 ;
     char *xmlfilename = 0;
     
-    if (!isDirectory(directory))
+    if (!is_directory(directory))
     {
         fprintf(stderr, "Can't open directory %s\n", directory);
         return -1;
@@ -283,13 +568,27 @@ int directorytoxml(const char *directory)
     return 0;
 }
 
+void usage(void)
+{
+    fprintf(stderr, "directorytoxml: converts a directory to an xml file\n");
+    fprintf(stderr, "Usage: directortoxml <directory>\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "by Malcolm McLean\n");
+    fprintf(stderr, "For use with the program directory to query the XML for files\n");
+}
 
 int main(int argc, char **argv)
 {
-    if (argc == 1)
-        directorytoxml(".");
-    else if (argc == 2)
-        directorytoxml(argv[1]);
+    int error;
     
+    if (argc == 1)
+        error = directorytoxml(".");
+    else if (argc == 2)
+        error = directorytoxml(argv[1]);
+    else
+        error = -1;
+    
+    if (error)
+        usage();
     return 0;
 }
