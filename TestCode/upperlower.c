@@ -150,7 +150,6 @@ void upperlower_r(XMLNODE *node)
     }
 }
 
-
 int main(int argc, char **argv)
 {
     XMLDOC *doc;

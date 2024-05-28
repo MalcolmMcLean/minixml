@@ -34,6 +34,11 @@ add_executable( "upperlower" ${xml_sources} ${xml_headers} "TestCode/upperlower.
 target_include_directories("upperlower" SYSTEM PRIVATE ${xml_includes})
 target_link_libraries( "upperlower" ${libs} )
 
+add_executable( "striptags" ${xml_sources} ${xml_headers} "TestCode/striptags.c")
+target_include_directories("striptags" SYSTEM PRIVATE ${xml_includes})
+target_link_libraries( "striptags" ${libs} )
+
+
 add_executable( "directory" ${xml_sources} ${xml_headers} "TestCode/directory.c")
 target_include_directories("directory" SYSTEM PRIVATE ${xml_includes})
 target_link_libraries( "directory" ${libs} )

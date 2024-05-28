@@ -41,6 +41,8 @@ int xml_Nchildren(XMLNODE *node);
 int xml_Nchildrenwithtag(XMLNODE *node, const char *tag);
 XMLNODE *xml_getchild(XMLNODE *node, const char *tag, int index);
 XMLNODE **xml_getdescendants(XMLNODE *node, const char *tag, int *N);
+char *xml_getnesteddata(XMLNODE *node);
+
 int xml_getlineno(XMLNODE *node);
 XMLATTRIBUTE *xml_unknownattributes(XMLNODE *node, ...);
 
