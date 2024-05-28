@@ -34,4 +34,14 @@ add_executable( "upperlower" ${xml_sources} ${xml_headers} "TestCode/upperlower.
 target_include_directories("upperlower" SYSTEM PRIVATE ${xml_includes})
 target_link_libraries( "upperlower" ${libs} )
 
+add_executable( "directory" ${xml_sources} ${xml_headers} "TestCode/directory.c")
+target_include_directories("directory" SYSTEM PRIVATE ${xml_includes})
+target_link_libraries( "directory" ${libs} )
+
+
+add_executable( "directorytoxml" ${xml_sources} ${xml_headers} "TestCode/directorytoxml.c"
+"TestCode/text_encoding_detect.c")
+target_include_directories("directorytoxml" SYSTEM PRIVATE ${xml_includes})
+target_link_libraries( "directorytoxml" ${libs} )
+
 
