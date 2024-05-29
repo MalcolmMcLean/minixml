@@ -358,7 +358,7 @@ int main(int argc, char **argv)
     FILE *fp;
     int ch;
     
-    if (argc != 2)
+    if (argc != 3)
         usage();
     
     doc = loadxmldoc(argv[1], error, 1024);

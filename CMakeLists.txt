@@ -34,6 +34,10 @@ add_executable( "upperlower" ${xml_sources} ${xml_headers} "TestCode/upperlower.
 target_include_directories("upperlower" SYSTEM PRIVATE ${xml_includes})
 target_link_libraries( "upperlower" ${libs} )
 
+add_executable( "xmltojson" ${xml_sources} ${xml_headers} "TestCode/xmltojson.c")
+target_include_directories("xmltojson" SYSTEM PRIVATE ${xml_includes})
+target_link_libraries( "xmltojson" ${libs} )
+
 add_executable( "xmltocsv" ${xml_sources} ${xml_headers} "TestCode/xmltocsv.c" 
 "TestCode/options.c" "TestCode/options.h")
 target_include_directories("xmltocsv" SYSTEM PRIVATE ${xml_includes})
@@ -43,11 +47,13 @@ add_executable( "striptags" ${xml_sources} ${xml_headers} "TestCode/striptags.c"
 target_include_directories("striptags" SYSTEM PRIVATE ${xml_includes})
 target_link_libraries( "striptags" ${libs} )
 
-
 add_executable( "directory" ${xml_sources} ${xml_headers} "TestCode/directory.c")
 target_include_directories("directory" SYSTEM PRIVATE ${xml_includes})
 target_link_libraries( "directory" ${libs} )
 
+add_executable( "listdirectory" ${xml_sources} ${xml_headers} "TestCode/listdirectory.c")
+target_include_directories("listdirectory" SYSTEM PRIVATE ${xml_includes})
+target_link_libraries( "listdirectory" ${libs} )
 
 add_executable( "directorytoxml" ${xml_sources} ${xml_headers} "TestCode/directorytoxml.c")
 target_include_directories("directorytoxml" SYSTEM PRIVATE ${xml_includes})
