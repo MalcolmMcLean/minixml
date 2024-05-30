@@ -79,7 +79,6 @@ Here's an example program.
 int main(int argc, char **argv)
 {
     XMLDOC *doc;
-    
     char error[1024];
        
     if (argc != 2)
