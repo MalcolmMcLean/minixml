@@ -166,7 +166,7 @@ There is nice suite of test programs which use the parser. Whilst they are mainl
 - directory - extract files from a FileSystem XML file packaged by previous program.
 - listdirectory - list files in a FileSystem XML file
   
-  This is a small but very real project. The idea is to package up a directory or folder in a single XML file, so that it can then be embedded in a program as a string, and used as an internal filesystem. You could also use it as a cheap and cheerful aleternative to the Unix program tar.
+  This is a small but very real project. The idea is to package up a directory or folder in a single XML file, so that it can then be embedded in a program as a string, and used as an internal filesystem. You could also use it as a cheap and cheerful alternative to the Unix program tar.
 
   Check out progress at the [Baby X resource compiler](http://malcolmmclean.github.io/babyxrc/importingdiectories.html).
     
