@@ -193,6 +193,7 @@ char *mystrdup(const char *str)
 int is_array(XMLNODE *node, int useattributes)
 {
     XMLNODE *child;
+    int isnull = 0;
     
     if (xml_Nchildren(node) < 2)
         return 0;
@@ -203,6 +204,18 @@ int is_array(XMLNODE *node, int useattributes)
         if (!nodeshavesamestructure(node->child, child, useattributes, 1))
             return 0;
         child = child->next;
+    }
+    if (useattributes && !node->child->child)
+    {
+        isnull = strwhitespace(xml_getdata(node->child));
+        child = node->child->next;
+        while (child)
+        {
+            if (strwhitespace(xml_getdata(child)) != isnull)
+                return 0;
+            child = child->next;
+        }
+        
     }
     
     return 1;

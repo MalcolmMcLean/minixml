@@ -30,6 +30,10 @@ add_executable( "simpletest" ${xml_sources} ${xml_headers} "TestCode/simpletest.
 target_include_directories("simpletest" SYSTEM PRIVATE ${xml_includes})
 target_link_libraries( "simpletest" ${libs} )
 
+add_executable( "printxml" ${xml_sources} ${xml_headers} "TestCode/printxml.c")
+target_include_directories("printxml" SYSTEM PRIVATE ${xml_includes})
+target_link_libraries( "printxml" ${libs} )
+
 add_executable( "upperlower" ${xml_sources} ${xml_headers} "TestCode/upperlower.c")
 target_include_directories("upperlower" SYSTEM PRIVATE ${xml_includes})
 target_link_libraries( "upperlower" ${libs} )

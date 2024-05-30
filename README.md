@@ -148,6 +148,7 @@ There is nice suite of test programs which use the parser. Whilst they are mainl
 ### Demonstration programs
 
 - simpletest - a simple test program to walk the tree
+- printxml - load the XML with the parser, then print it back out 
 - striptags - strip all tags from XML
 - upperlower - simple markup language with two tags
 

@@ -13,6 +13,10 @@ simpletest.c
 
 This just tests the parser's load function, and then walks the document tree, printing out the tags. But it shows off the error reporting capabilities.
 
+printxml.c
+
+Run the XML through the parser, and print it back out. Essential test program.
+
 striptags.c
 
 Shows how utterly simple it is to strip the tags and obtain the data string using the facilities of the parser. It also shows up one of the problems - whitespace handling in XML is difficult and currently the parser does not attempt it.

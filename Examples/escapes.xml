@@ -1,0 +1,19 @@
+<Escapes>
+   <sub attribute = "ampersand = &amp;" />
+   <sub attribute = "quote = &quot;" />
+   <sub attribute = "apostrophe = &apos;" />
+   <sub attribute = "less than = &lt;" />
+   <sub attribute = "greater than = &gt;" />
+   <empty attribute = "ampersand = &amp;"></empty>
+   <empty attribute = "quote = &quot;"></empty>                   
+   <empty attribute = "apostrophe = &apos;"></empty>                    
+   <empty attribute = "less than = &lt;"></empty>                      
+   <empty attribute = "greater than = &gt;"></empty>
+   <text>
+	ampersand = &amp;
+	quote = &quot;                 
+	apostrophe = &apos;                   
+	less than = &lt;                      
+	greater than = &gt;    
+   </text>             
+</Escapes>
