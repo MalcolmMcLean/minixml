@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "options.h"
 #include "xmlparser2.h"
 
 #define TYPE_UNKNOWN 0
@@ -163,6 +164,23 @@ char *trim(const char *str)
     return answer;
 }
 
+/*
+   Does a string cnsist entirely of white space? (also treat nulls as white)
+ */
+int strwhitespace(const char *str)
+{
+    if (!str)
+        return 1;
+    while (*str)
+    {
+        if (!isspace((unsigned char) *str))
+            return  0;
+        str++;
+    }
+    
+    return 1;
+}
+
 char *mystrdup(const char *str)
 {
     char *answer = malloc(strlen(str) +1);
@@ -172,7 +190,7 @@ char *mystrdup(const char *str)
 }
 
 
-int is_array(XMLNODE *node)
+int is_array(XMLNODE *node, int useattributes)
 {
     XMLNODE *child;
     
@@ -182,7 +200,7 @@ int is_array(XMLNODE *node)
     child = node->child->next;
     while (child)
     {
-        if (!nodeshavesamestructure(node->child, child, 0, 1))
+        if (!nodeshavesamestructure(node->child, child, useattributes, 1))
             return 0;
         child = child->next;
     }
@@ -190,29 +208,36 @@ int is_array(XMLNODE *node)
     return 1;
 }
 
-int is_object(XMLNODE *node)
+int is_object(XMLNODE *node, int useattributes)
 {
     if (node->child)
+        return 1;
+    if (useattributes && node->attributes)
         return 1;
     return 0;
 }
 
-int is_field(XMLNODE *node)
+int is_field(XMLNODE *node, int useattributes)
 {
+   if (useattributes && node->attributes)
+   {
+       if (strwhitespace(xml_getdata(node)))
+           return 0;
+   }
    if (node->child)
        return 0;
     return 1;
     
 }
 
-int childrenallfields(XMLNODE *node)
+int childrenallfields(XMLNODE *node, int useattributes)
 {
     XMLNODE *child;
     
     child = node->child;
     while (child)
     {
-        if (!is_field(child))
+        if (!is_field(child, useattributes))
             return 0;
             
         child = child->next;
@@ -220,36 +245,50 @@ int childrenallfields(XMLNODE *node)
     return 1;
 }
 
-void writefield(FILE *fp, XMLNODE *node)
+void writefield(FILE *fp, const char *raw)
 {
     int type;
     char *data = 0;
     char *jsondata = 0;
     
-    data = trim(xml_getdata(node));
+    if (!raw)
+    {
+        fprintf(fp, "null");
+        return;
+    }
     
+    data = trim(raw);
+    if (!data)
+        goto out_of_memory;
     type = getdatatype(data);
     if (type == TYPE_NUMBER)
         fprintf(fp, "%s", data);
     else if (type == TYPE_STRING)
     {
         jsondata = escapejsonstring(data);
+        if (!jsondata)
+            goto out_of_memory;
         fprintf(fp, "\"%s\"", jsondata);
         free(jsondata);
         jsondata = 0;
     }
     else
         fprintf(fp, "null");
+    free(data);
+    return;
+out_of_memory:
+    free(data);
 }
 
-void xmltojson_r(FILE *fp, XMLNODE *node, int depth, int writetag, int newline)
+void xmltojson_r(FILE *fp, XMLNODE *node, int useattributes,  int depth, int writetag, int newline)
 {
     int i;
     int sameline;
+    XMLATTRIBUTE *attr;
     
     while (node)
     {
-        if (is_array(node))
+        if (is_array(node, useattributes))
         {
             if (newline)
             {
@@ -258,11 +297,11 @@ void xmltojson_r(FILE *fp, XMLNODE *node, int depth, int writetag, int newline)
             }
             if (writetag)
                 fprintf(fp, "%s:", xml_gettag(node));
-            sameline = childrenallfields(node);
+            sameline = childrenallfields(node, useattributes);
             fprintf(fp, "[");
             if (!sameline)
                 fprintf(fp,"\n");
-            xmltojson_r(fp, node->child, depth + 1, 0, !sameline);
+            xmltojson_r(fp, node->child, useattributes, depth + 1, 0, !sameline);
             if (newline && !sameline)
             {
                 for (i = 0; i < depth; i++)
@@ -270,7 +309,7 @@ void xmltojson_r(FILE *fp, XMLNODE *node, int depth, int writetag, int newline)
             }
             fprintf(fp, "]");
         }
-        else if (is_object(node))
+        else if (is_object(node, useattributes))
         {
             if (newline)
             {
@@ -280,7 +319,30 @@ void xmltojson_r(FILE *fp, XMLNODE *node, int depth, int writetag, int newline)
             if (writetag)
                 fprintf(fp, "%s:", xml_gettag(node));
             fprintf(fp, "{\n");
-            xmltojson_r(fp, node->child, depth + 1, 1, 1);
+            if (useattributes)
+            {
+                for (attr=node->attributes; attr != NULL; attr = attr->next)
+                {
+                    for (i = 0; i < depth + 1; i++)
+                        fprintf(fp, "  ");
+                    fprintf(fp, "@%s:", attr->name);
+                    writefield(fp, attr->value);
+                    if (attr->next || is_field(node, useattributes) || node->child)
+                        fprintf(fp, ",\n");
+                    else
+                        fprintf(fp,"\n");
+                }
+                if (is_field(node, useattributes))
+                {
+                    for (i = 0; i < depth + 1; i++)
+                        fprintf(fp, "  ");
+                    fprintf(fp, "%s:", xml_gettag(node));
+                    writefield(fp, xml_getdata(node));
+                    fprintf(fp, "\n");
+                }
+            }
+            if (node->child)
+                xmltojson_r(fp, node->child, useattributes, depth + 1, 1, 1);
             if (newline)
             {
                 for (i = 0; i < depth; i++)
@@ -288,7 +350,7 @@ void xmltojson_r(FILE *fp, XMLNODE *node, int depth, int writetag, int newline)
             }
             fprintf(fp, "}");
         }
-        else if (is_field(node))
+        else if (is_field(node, useattributes))
         {
             if (newline)
             {
@@ -297,11 +359,11 @@ void xmltojson_r(FILE *fp, XMLNODE *node, int depth, int writetag, int newline)
             }
             if (writetag)
                 fprintf(fp, "%s:", xml_gettag(node));
-            writefield(fp, node);
+            writefield(fp, xml_getdata(node));
         }
         if (node->next)
         {
-            if (is_array(node->next) || is_object(node->next) || is_field(node->next))
+            if (is_array(node->next, useattributes) || is_object(node->next, useattributes) || is_field(node->next, useattributes))
             {
                 fprintf(fp, ",");
                 if (newline)
@@ -317,23 +379,25 @@ void xmltojson_r(FILE *fp, XMLNODE *node, int depth, int writetag, int newline)
         fprintf(fp, "\n");
 }
                       
-int xmltojson(FILE *fp, XMLNODE *node)
+int xmltojson(FILE *fp, XMLNODE *node, int useattributes)
 {
-    if (is_array(node))
+    if (is_array(node, useattributes))
     {
         fprintf(fp, "[\n");
-        xmltojson_r(fp, node->child, 1, 0, 1);
+        xmltojson_r(fp, node->child, useattributes, 1, 0, 1);
         fprintf(fp, "]\n");
     }
-    else if (is_object(node))
+    else if (is_object(node, useattributes))
     {
         fprintf(fp, "{\n");
-        xmltojson_r(fp, node->child, 1, 1, 1);
+        xmltojson_r(fp, node->child, useattributes, 1, 1, 1);
         fprintf(fp, "}\n");
     }
-    else if (is_field(node))
+    else if (is_field(node, useattributes))
     {
-        
+        fprintf(fp, "{");
+        xmltojson_r(fp, node->child, useattributes, 1, 1, 0);
+        fprintf(fp, "}\n");
     }
     
     return 0;
@@ -343,7 +407,9 @@ int xmltojson(FILE *fp, XMLNODE *node)
 void usage(void)
 {
     fprintf(stderr, "xmltojson - converts xml files to json diles\n");
-    fprintf(stderr, "Usage: xmltojson <infile.xml>\n");
+    fprintf(stderr, "Usage: xmltojson [options] <infile.xml>\n");
+    fprintf(stderr, "Options:\n");
+    fprintf(stderr, "    -a: use attributes\n");
     fprintf(stderr, "\n");
     
     exit(EXIT_FAILURE);
@@ -352,20 +418,33 @@ void usage(void)
 
 int main(int argc, char **argv)
 {
-    XMLDOC *doc;
+    OPTIONS *opt = 0;
+    XMLDOC *doc = 0;
     char error[1024];
+    char *infile = 0;
+    int useattributes = 0;
     
-    if (argc != 2)
+    opt = options(argc, argv, "a");
+    if (opt_get(opt, "-a", 0))
+        useattributes = 1;
+    if (opt_error(opt, stderr))
         usage();
+    if (opt_Nargs(opt) != 1)
+        usage();
+    infile = opt_arg(opt, 0);
+    killoptions(opt);
         
-    doc = loadxmldoc(argv[1],error, 1024);
+    doc = loadxmldoc(infile, error, 1024);
 
     if (!doc)
     {
         fprintf(stderr, "%s\n", error);
         exit(EXIT_FAILURE);
     }
-    xmltojson(stdout, xml_getroot(doc));
+    xmltojson(stdout, xml_getroot(doc), useattributes);
+    
+    killxmldoc(doc);
+    free(infile);
     
     return 0;
 }

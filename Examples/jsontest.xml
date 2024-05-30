@@ -1,0 +1,61 @@
+<JSON>
+   <fred></fred>
+   <jim attribute="option" />
+   <bert>Bert</bert>
+   <harry>
+     <alf></alf>
+   </harry>
+   <array>
+       <x>1.0</x>
+       <x>2.0</x>
+       <x>3.0</x>
+       <x>4.0</x>
+       <x>5.0</x>
+       <x>7.0</x>
+       <x>8.0</x>
+       <x>9.0</x>
+       <x>10.0</x>
+       <x>11.0</x>
+       <x>12.0</x>
+   </array>
+   <object>
+       <strings>
+           <s>one</s>
+           <s>two</s>
+           <s>three</s>
+       </strings>
+       <subobjects>
+           <object faith="firm" hope="sure" charity="generous">
+           </object>
+           <object faith="firm" hope="sure" charity="generous">
+           </object>
+           <object faith="firm" hope="sure" charity="generous">
+           </object>
+           <object faith="firm" hope="sure" charity="generous">
+           </object>
+           <object faith="firm" hope="sure" charity="generous">
+           </object>
+           <object faith="firm" hope="sure" charity="generous">
+           </object>
+           <object faith="firm" hope="sure" charity="generous">
+           </object>
+           <object faith="firm" hope="sure" charity="generous">
+           </object>
+           <object faith="firm" hope="sure" charity="generous">
+           </object>
+           <object faith="shaky" hope="absent" charity="begins at home">
+           </object>
+       </subobjects>
+       <badarray>
+           <object faith="firm" hope="sure" charity="generous">
+           </object>
+           <object faith="firm" hope="sure" charity="generous">
+           </object>
+           <object badfaith="this makes it not an array" hope="sure" charity="generous">
+           </object>
+           <object faith="firm" hope="sure" charity="generous">
+           </object>
+       </badarray>
+   </object>
+   
+</JSON>

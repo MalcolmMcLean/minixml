@@ -34,7 +34,8 @@ add_executable( "upperlower" ${xml_sources} ${xml_headers} "TestCode/upperlower.
 target_include_directories("upperlower" SYSTEM PRIVATE ${xml_includes})
 target_link_libraries( "upperlower" ${libs} )
 
-add_executable( "xmltojson" ${xml_sources} ${xml_headers} "TestCode/xmltojson.c")
+add_executable( "xmltojson" ${xml_sources} ${xml_headers} "TestCode/xmltojson.c"
+"TestCode/options.c" "TestCode/options.h")
 target_include_directories("xmltojson" SYSTEM PRIVATE ${xml_includes})
 target_link_libraries( "xmltojson" ${libs} )
 
