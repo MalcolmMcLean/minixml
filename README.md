@@ -142,6 +142,34 @@ You can free the bad attributes recursively. They are deep copies.
 Note a quirk of C. You must not pass a raw 0 or even a NULL to a variadic function which expects a character pointer, as it might be treated as 32 bit integer whilst pointers are 64 bits. 
 
 
+## Test Code
+There is nice suite of test programs which use the parser. Whilst they are mainly written for demonstration purposes, some of them are also hoped to be useful. 
+
+### Demonstration programs
+
+- simpletest - a simple test program to walk the tree
+- striptags - strip all tags from XML
+- upperlower - simple markup language with two tags
+
+  These are intended as simple programs to test the parser, and show how to use it.
+  
+### Format converters
+
+- xmltojson - XML to JSON converter
+- xmltocsv - XML to CSV converter
+
+  These are two file format converters. They are simple, but intended to be usable for real.
+  
+### The XML FileSystem project
+
+- directorytoxml - package a directry as an XML file
+- directory - extract files from a FileSystem XML file packaged by previous program.
+- listdirectory - list files in a FileSystem XML file
+  
+  This is a small but very real project. The idea is to package up a directory or folder in a single XML file, so that it can then be embedded in a program as a string, and used as an internal filesystem. You could also use it as a cheap and cheerful aleternative to the Unix program tar.
+
+  Check out progress at the [Baby X resource compiler](http://malcolmmclean.github.io/babyxrc/importingdiectories.html).
+    
 ## Copyright
 All the code is authored by Malcolm McLean
 
