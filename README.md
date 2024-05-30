@@ -162,7 +162,7 @@ There is nice suite of test programs which use the parser. Whilst they are mainl
   
 ### The XML FileSystem project
 
-- directorytoxml - package a directry as an XML file
+- directorytoxml - package a directory as an XML file
 - directory - extract files from a FileSystem XML file packaged by previous program.
 - listdirectory - list files in a FileSystem XML file
   
