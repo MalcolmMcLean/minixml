@@ -74,7 +74,7 @@ They return an XML document on success, NULL on fail. xmldocfromstring has to be
 Here's an example program.
 
 ```c
-#include "xmparser2.h"
+#include "xmlparser2.h"
 
 int main(int argc, char **argv)
 {
@@ -126,7 +126,7 @@ XLMATTRIBUTE *badattr;
 XMLATTRIBUTE *attr;
 char *end = NULL;
 
-badattr = xml_unknownattributes(node, "mytag", "faith", "hope" "charity", end);
+badattr = xml_unknownattributes(node, "mytag", "faith", "hope", "charity", end);
 if (badattr)
 {
    printf("Node <mytag> line %d only attributes allowed are faith, hope and charity\n",
